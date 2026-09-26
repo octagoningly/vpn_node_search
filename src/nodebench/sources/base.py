@@ -4,6 +4,7 @@ import base64
 import binascii
 import re
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -25,6 +26,18 @@ class CollectOutcome(BaseModel):
 
     items: list[RawItem] = Field(default_factory=list)
     reports: list[SourceReport] = Field(default_factory=list)
+
+
+def resolve_base_dir(ctx: Any = None, base_dir: str | Path | None = None) -> Path:
+    if base_dir is not None:
+        return Path(base_dir)
+    if isinstance(ctx, (str, Path)):
+        return Path(ctx)
+    if ctx is not None:
+        candidate = getattr(ctx, "base_dir", None)
+        if candidate:
+            return Path(candidate)
+    return Path.cwd()
 
 
 def make_error(code: str, message: str, retryable: bool = False) -> ErrorInfo:
@@ -89,6 +102,7 @@ __all__ = [
     "BOM",
     "CollectOutcome",
     "make_error",
+    "resolve_base_dir",
     "looks_like_base64",
     "detect_content_type",
     "content_type_for",
