@@ -1,0 +1,3 @@
+vless://123e4567-e89b-12d3-a456-426614174000@192.0.2.10:443?type=tcp&security=tls&host=node.example.test#sample-192-0-2-10
+trojan://sample-password@198.51.100.7:443?security=tls&peer=edge.example.test#sample-198-51-100-7
+ss://YWVzLTI1Ni1nY206c2FtcGxlLXBhc3N3b3Jk@203.0.113.9:8388#sample-203-0-113-9

@@ -1,0 +1,19 @@
+proxies:
+  - name: sample-192-0-2-30
+    type: vless
+    server: 192.0.2.30
+    port: 443
+    uuid: 123e4567-e89b-12d3-a456-426614174000
+    network: ws
+    tls: true
+    servername: node.example.test
+    ws-opts:
+      path: /ws
+      headers:
+        Host: node.example.test
+  - name: sample-203-0-113-30
+    type: trojan
+    server: 203.0.113.30
+    port: 443
+    password: sample-password
+    sni: edge.example.test
