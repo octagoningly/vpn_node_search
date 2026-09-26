@@ -12,13 +12,21 @@ from typing import Any
 from nodebench.core.config import AppConfig, load_config
 from nodebench.core.context import build_run_context, redact
 from nodebench.core.errors import NodeBenchError, exit_code_for
-from nodebench.core.orchestrator import run_pipeline
-from nodebench.core.serialization import write_json_atomic
+from nodebench.core.orchestrator import resolve_run_exit, run_pipeline
+from nodebench.core.schema import SCHEMA_VERSION
+from nodebench.core.serialization import public_dump, write_json_atomic
+from nodebench.probes import (
+    LEVEL_WARN,
+    as_check,
+    check_cf_prereqs,
+    check_proxy_prereqs,
+)
 
 STUB_MESSAGE = "not implemented yet"
-DOCTOR_MESSAGE = "core ready, adapters pending"
+DOCTOR_MESSAGE = "core ready, probes available"
+DOCTOR_MESSAGE_PENDING = "core ready, probes pending"
 WRITE_PROBE_NAME = ".doctor-write-check.tmp"
-BINARY_NAMES = ("mihomo", "clash", "gh")
+BINARY_NAMES = ("clash", "gh")
 CREDENTIAL_ENV_NAMES = ("NODEBENCH_GITHUB_TOKEN", "NODEBENCH_REPUTATION_API_KEY")
 
 
@@ -52,6 +60,9 @@ def _load(
     if input_path:
         overrides["sources.local.enabled"] = True
         overrides["sources.local.paths"] = [str(input_path)]
+    output_dir = getattr(args, "output_dir", None)
+    if output_dir:
+        overrides["output_dir"] = str(output_dir)
     return load_config(
         root / "config" / "default.yaml",
         profile_path,
@@ -70,20 +81,65 @@ def _report_path(
     return base / run_id / name
 
 
+def _probe_results_path(
+    config: AppConfig, output_dir: str | None, run_id: str
+) -> Path:
+    return _report_path(config, output_dir, run_id, False).with_name(
+        "probe-results.json"
+    )
+
+
+def _model_dump(value: Any) -> Any:
+    dump = getattr(value, "model_dump", None)
+    if callable(dump):
+        return dump(mode="python")
+    return value
+
+
+def _write_probe_results(
+    path: Path, run_id: str, generated_at: str, results: list
+) -> Path:
+    payload = public_dump(
+        {
+            "schema_version": SCHEMA_VERSION,
+            "run_id": run_id,
+            "generated_at": generated_at,
+            "results": [_model_dump(result) for result in results],
+        }
+    )
+    return write_json_atomic(path, payload)
+
+
 def _cmd_run(args: argparse.Namespace) -> int:
     config = _load(args)
     ctx = build_run_context(config, args)
-    result = run_pipeline(config, ctx, dry_run=bool(args.dry_run))
+    results: list = []
+    result = run_pipeline(config, ctx, dry_run=bool(args.dry_run), probe_sink=results)
     path = _report_path(config, args.output_dir, ctx.run_id, bool(args.dry_run))
     write_json_atomic(path, result)
+    if results and not args.dry_run:
+        probe_path = _write_probe_results(
+            _probe_results_path(config, args.output_dir, ctx.run_id),
+            ctx.run_id,
+            str(result["generated_at"]),
+            results,
+        )
+        print(f"[{ctx.run_id}] probe_results={probe_path}")
     print(f"[{ctx.run_id}] status={result['status']} report={path}")
-    return 3 if result["status"] == "failed" else 0
+    return resolve_run_exit(
+        run_status=str(result["status"]),
+        probe=result.get("probe"),
+        probe_results=results or None,
+        cf_enabled=bool(config.probe.cf.enabled),
+        target_host=str(config.probe.cf.target_host or ""),
+        strict=bool(getattr(args, "strict", False)),
+    )
 
 
 def _cmd_collect(args: argparse.Namespace) -> int:
     config = _load(args)
     ctx = build_run_context(config, args)
-    result = run_pipeline(config, ctx, dry_run=False)
+    result = run_pipeline(config, ctx, dry_run=False, run_probes=False)
     for report in result["source_reports"]:
         print(
             "source {0}: ok={1} fetched={2} errors={3}".format(
@@ -105,7 +161,12 @@ def _cmd_collect(args: argparse.Namespace) -> int:
             result["status"],
         )
     )
-    return 3 if result["status"] == "failed" else 0
+    return resolve_run_exit(
+        run_status=str(result["status"]),
+        probe=result.get("probe"),
+        cf_enabled=bool(config.probe.cf.enabled),
+        target_host=str(config.probe.cf.target_host or ""),
+    )
 
 
 def _error_text(err: BaseException) -> str:
@@ -194,33 +255,10 @@ def _doctor_checks(args: argparse.Namespace) -> list[tuple[str, str, str, str]]:
             )
     checks.append(_check_output_dir(root, config))
     if config is not None:
-        cf_enabled = config.sources.cf.enabled or config.probe.cf.enabled
-        target_host = (config.probe.cf.target_host or "").strip()
-        if not cf_enabled:
-            checks.append(("ok", "cf_target", "cf probing disabled", ""))
-        elif target_host:
-            checks.append(("ok", "cf_target", target_host, ""))
-        else:
-            checks.append(
-                (
-                    "fail",
-                    "cf_target",
-                    "probe.cf.target_host is empty while cf is enabled",
-                    "set probe.cf.target_host or disable cf",
-                )
-            )
-        speedtest_url = (config.probe.proxy.speedtest_url or "").strip()
-        if speedtest_url:
-            checks.append(("ok", "probe_url", speedtest_url, ""))
-        else:
-            checks.append(
-                (
-                    "warn",
-                    "probe_url",
-                    "probe.proxy.speedtest_url is empty; probing stays pending",
-                    "set probe.proxy.speedtest_url before enabling probing",
-                )
-            )
+        checks.extend(
+            as_check(report) for report in check_proxy_prereqs(config, root)
+        )
+        checks.extend(as_check(report) for report in check_cf_prereqs(config, root))
     for name in BINARY_NAMES:
         found = shutil.which(name)
         if found:
@@ -252,12 +290,48 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
     if failures:
         print(f"{failures} failing check(s)")
         return 2
-    print(DOCTOR_MESSAGE)
+    pending = any(level == LEVEL_WARN for level, _name, _detail, _fix in checks)
+    print(DOCTOR_MESSAGE_PENDING if pending else DOCTOR_MESSAGE)
     return 0
 
 
 def _cmd_probe(args: argparse.Namespace) -> int:
-    return _stub(args)
+    config = _load(args)
+    ctx = build_run_context(config, args)
+    results: list = []
+    result = run_pipeline(config, ctx, dry_run=False, probe_sink=results)
+    probe = result.get("probe") or {}
+    for kind in ("proxy", "cf"):
+        node = probe.get(kind) or {}
+        print(
+            "probe {0}: mode={1} backend={2} attempted={3} ok={4} "
+            "usable_real={5} skipped={6} reason={7}".format(
+                kind,
+                node.get("mode"),
+                node.get("backend"),
+                node.get("attempted"),
+                node.get("ok"),
+                node.get("usable_real"),
+                node.get("skipped"),
+                node.get("skipped_reason"),
+            )
+        )
+    if results:
+        probe_path = _write_probe_results(
+            _probe_results_path(config, getattr(args, "output_dir", None), ctx.run_id),
+            ctx.run_id,
+            str(result["generated_at"]),
+            results,
+        )
+        print(f"[{ctx.run_id}] probe_results={probe_path}")
+    print(f"[{ctx.run_id}] status={result['status']}")
+    return resolve_run_exit(
+        run_status=str(result["status"]),
+        probe=probe,
+        probe_results=results or None,
+        cf_enabled=bool(config.probe.cf.enabled),
+        target_host=str(config.probe.cf.target_host or ""),
+    )
 
 
 def _cmd_inspect(args: argparse.Namespace) -> int:
@@ -304,6 +378,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--output-dir", default=None, help="directory that receives run reports"
     )
     run_parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="fail when probing is enabled but produces no real measurements",
+    )
+    run_parser.add_argument(
         "--debug",
         action="store_true",
         default=argparse.SUPPRESS,
@@ -332,13 +411,19 @@ def build_parser() -> argparse.ArgumentParser:
         stage_parser = subparsers.add_parser(name, help=f"{name} stage")
         stage_parser.add_argument("--run-id", default=None, help="upstream run id")
         stage_parser.add_argument("--input", default=None, help="upstream artifact")
-        if name == "collect":
+        if name in ("collect", "probe"):
             stage_parser.add_argument("--profile", default=None, help="profile name")
             stage_parser.add_argument(
                 "--debug",
                 action="store_true",
                 default=argparse.SUPPRESS,
                 help="print a traceback for unexpected errors",
+            )
+        if name == "probe":
+            stage_parser.add_argument(
+                "--output-dir",
+                default=None,
+                help="directory that receives probe reports",
             )
         stage_parser.set_defaults(func=handler)
 

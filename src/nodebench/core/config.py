@@ -6,7 +6,13 @@ from pathlib import Path
 from typing import Any, Mapping
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+)
 
 from nodebench.core.errors import ConfigError
 
@@ -77,6 +83,17 @@ class ProxyProbeConfig(BaseModel):
     max_nodes: int = 100
     max_download_mb_each: float = 5
     speedtest_url: str = ""
+    mihomo_path: str = ""
+    api_timeout_s: float = 10
+    per_node_timeout_s: float = 20
+    total_deadline_s: float = 300
+
+    @field_validator("api_timeout_s", "per_node_timeout_s", "total_deadline_s")
+    @classmethod
+    def _positive_timeout(cls, value: float) -> float:
+        if float(value) <= 0:
+            raise ValueError("must be greater than zero")
+        return float(value)
 
 
 class CfProbeConfig(BaseModel):
@@ -87,6 +104,39 @@ class CfProbeConfig(BaseModel):
     max_download_nodes: int = 20
     target_host: str = ""
     speedtest_url: str = ""
+    cfst_path: str = ""
+    tcp_timeout_s: float = 5
+    tls_timeout_s: float = 5
+    http_timeout_s: float = 5
+    total_deadline_s: float = 600
+    allowed_ports: list[int] = Field(default_factory=lambda: [443])
+    ip_family: str = "4"
+
+    @field_validator("tcp_timeout_s", "tls_timeout_s", "http_timeout_s", "total_deadline_s")
+    @classmethod
+    def _positive_timeout(cls, value: float) -> float:
+        if float(value) <= 0:
+            raise ValueError("must be greater than zero")
+        return float(value)
+
+    @field_validator("allowed_ports")
+    @classmethod
+    def _valid_ports(cls, value: list[int]) -> list[int]:
+        if not value:
+            raise ValueError("allowed_ports must not be empty")
+        for port in value:
+            if isinstance(port, bool) or not isinstance(port, int):
+                raise ValueError("allowed_ports entries must be integers")
+            if not 1 <= port <= 65535:
+                raise ValueError("allowed_ports entries must be between 1 and 65535")
+        return list(value)
+
+    @field_validator("ip_family")
+    @classmethod
+    def _valid_ip_family(cls, value: str) -> str:
+        if value not in {"4", "6", "all"}:
+            raise ValueError("ip_family must be one of: 4, 6, all")
+        return value
 
 
 class ProbeConfig(BaseModel):

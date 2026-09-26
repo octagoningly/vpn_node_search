@@ -2,11 +2,17 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 from pathlib import Path
 
 import pytest
 
-from nodebench.cli.main import DOCTOR_MESSAGE, STUB_MESSAGE, main
+from nodebench.cli.main import (
+    DOCTOR_MESSAGE,
+    DOCTOR_MESSAGE_PENDING,
+    STUB_MESSAGE,
+    main,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 INPUT_DIR = PROJECT_ROOT / "input"
@@ -38,16 +44,55 @@ def read_report(output_dir: Path, name: str) -> dict:
     return json.loads(matches[0].read_text(encoding="utf-8"))
 
 
-def test_doctor_passes_on_shipped_setup(capsys):
+def test_doctor_fails_when_mihomo_is_missing(monkeypatch, tmp_path: Path, capsys):
+    monkeypatch.setenv(
+        "NODEBENCH_PROBE__PROXY__MIHOMO_PATH", str(tmp_path / "absent-mihomo")
+    )
     code = main(["doctor"])
     out = capsys.readouterr()
-    assert code == 0
-    assert "[FAIL]" not in out.out
-    assert DOCTOR_MESSAGE in out.out
+    assert code == 2
+    assert "[FAIL] mihomo_binary:" in out.out
     assert "[OK] python:" in out.out
     assert "[OK] config:" in out.out
     assert "[OK] input:" in out.out
     assert "[OK] output:" in out.out
+    assert DOCTOR_MESSAGE not in out.out
+    assert DOCTOR_MESSAGE_PENDING not in out.out
+
+
+def test_doctor_passes_when_probe_prerequisites_resolve(
+    monkeypatch, tmp_path: Path, capsys
+):
+    fake_binary = tmp_path / "mihomo.exe"
+    fake_binary.write_bytes(b"")
+    monkeypatch.setenv("NODEBENCH_PROBE__PROXY__MIHOMO_PATH", str(fake_binary))
+    monkeypatch.setenv(
+        "NODEBENCH_PROBE__PROXY__SPEEDTEST_URL",
+        "https://speed.cloudflare.com/__down",
+    )
+    monkeypatch.setattr(shutil, "which", lambda name: f"/fake/bin/{name}")
+    code = main(["doctor"])
+    out = capsys.readouterr()
+    assert code == 0
+    assert "[FAIL]" not in out.out
+    assert "[OK] mihomo_binary:" in out.out
+    assert DOCTOR_MESSAGE in out.out
+    assert DOCTOR_MESSAGE_PENDING not in out.out
+
+
+def test_doctor_reports_pending_when_speedtest_url_missing(
+    monkeypatch, tmp_path: Path, capsys
+):
+    fake_binary = tmp_path / "mihomo.exe"
+    fake_binary.write_bytes(b"")
+    monkeypatch.setenv("NODEBENCH_PROBE__PROXY__MIHOMO_PATH", str(fake_binary))
+    monkeypatch.setattr(shutil, "which", lambda name: f"/fake/bin/{name}")
+    code = main(["doctor"])
+    out = capsys.readouterr()
+    assert code == 0
+    assert "[WARN] speedtest_url:" in out.out
+    assert DOCTOR_MESSAGE_PENDING in out.out
+    assert DOCTOR_MESSAGE not in out.out
 
 
 def test_doctor_reports_missing_cf_target(monkeypatch, capsys):
@@ -62,9 +107,10 @@ def test_doctor_reports_missing_cf_target(monkeypatch, capsys):
 
 def test_doctor_never_prints_secret_values(monkeypatch, capsys):
     monkeypatch.setenv("NODEBENCH_GITHUB_TOKEN", "ghp_example_token_value")
+    monkeypatch.setenv("NODEBENCH_PROBE__PROXY__MIHOMO_PATH", "absent-mihomo-binary")
     code = main(["doctor"])
     out = capsys.readouterr()
-    assert code == 0
+    assert code == 2
     assert "ghp_example_token_value" not in out.out
     assert "nodebench_github_token: set" in out.out
 
@@ -94,7 +140,12 @@ def test_run_dry_run_writes_report(tmp_path: Path, capsys):
     assert not list(output_dir.glob("*/run-report.json"))
 
 
-def test_run_without_dry_run_writes_run_report(tmp_path: Path, capsys):
+def test_run_without_dry_run_writes_run_report(
+    tmp_path: Path, capsys, monkeypatch
+):
+    monkeypatch.setenv(
+        "NODEBENCH_PROBE__PROXY__MIHOMO_PATH", str(tmp_path / "absent-mihomo")
+    )
     source = write(tmp_path / "input" / "nodes.txt", URI_TEXT)
     output_dir = tmp_path / "out"
     code = main(
@@ -104,7 +155,11 @@ def test_run_without_dry_run_writes_run_report(tmp_path: Path, capsys):
     assert code == 0
     report = read_report(output_dir, "run-report.json")
     assert report["dry_run"] is False
-    assert report["status"] == "ok"
+    assert report["status"] == "partial"
+    proxy = report["probe"]["proxy"]
+    assert proxy["mode"] == "skip"
+    assert proxy["skipped_reason"] == "missing_binary"
+    assert len(list(output_dir.glob("*/probe-results.json"))) == 1
     assert not list(output_dir.glob("*/dry-run-report.json"))
 
 
@@ -156,11 +211,13 @@ def test_collect_prints_source_reports(tmp_path: Path, capsys):
 
 def test_doctor_resolves_project_root_from_any_cwd(monkeypatch, tmp_path: Path, capsys):
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("NODEBENCH_PROBE__PROXY__MIHOMO_PATH", "absent-mihomo-binary")
     code = main(["doctor"])
     out = capsys.readouterr()
-    assert code == 0
+    assert code == 2
     assert "[OK] input: 6 sample files" in out.out
-    assert DOCTOR_MESSAGE in out.out
+    assert "[FAIL] mihomo_binary:" in out.out
+    assert DOCTOR_MESSAGE not in out.out
 
 
 def test_collect_resolves_relative_paths_against_cwd(
@@ -179,7 +236,7 @@ def test_project_samples_stay_reachable():
 
 
 def test_stub_stage_is_not_implemented(capsys):
-    for name in ("probe", "inspect", "score", "export"):
+    for name in ("inspect", "score", "export"):
         code = main([name])
         out = capsys.readouterr()
         assert code == 0
@@ -203,3 +260,68 @@ def test_help_returns_zero(capsys):
     assert run_code == 0
     assert "--dry-run" in run_out.out
     assert "--output-dir" in run_out.out
+
+
+def test_run_strict_fails_when_probes_skip(tmp_path: Path, capsys, monkeypatch):
+    monkeypatch.setenv(
+        "NODEBENCH_PROBE__PROXY__MIHOMO_PATH", str(tmp_path / "absent-mihomo")
+    )
+    source = write(tmp_path / "input" / "nodes.txt", URI_TEXT)
+    output_dir = tmp_path / "out"
+    code = main(
+        [
+            "run",
+            "--strict",
+            "--input",
+            str(source),
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    out = capsys.readouterr()
+    assert code == 4
+    assert "status=partial" in out.out
+    report = read_report(output_dir, "run-report.json")
+    assert report["status"] == "partial"
+    assert report["probe"]["proxy"]["skipped_reason"] == "missing_binary"
+
+
+def test_probe_command_prints_summary_and_writes_results(
+    tmp_path: Path, capsys, monkeypatch
+):
+    monkeypatch.setenv(
+        "NODEBENCH_PROBE__PROXY__MIHOMO_PATH", str(tmp_path / "absent-mihomo")
+    )
+    source = write(tmp_path / "input" / "nodes.txt", URI_TEXT)
+    output_dir = tmp_path / "out"
+    code = main(
+        [
+            "probe",
+            "--input",
+            str(source),
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    out = capsys.readouterr()
+    assert code == 0
+    assert (
+        "probe proxy: mode=skip backend=mihomo attempted=0 ok=0 usable_real=0 "
+        "skipped=2 reason=missing_binary" in out.out
+    )
+    assert (
+        "probe cf: mode=skip backend=cfst attempted=0 ok=0 usable_real=0 "
+        "skipped=0 reason=disabled" in out.out
+    )
+    assert "status=partial" in out.out
+    assert "probe_results=" in out.out
+    payloads = list(output_dir.glob("*/probe-results.json"))
+    assert len(payloads) == 1
+    payload = json.loads(payloads[0].read_text(encoding="utf-8"))
+    assert payload["schema_version"] == 1
+    assert len(payload["results"]) == 2
+    assert all(item["status"] == "skipped" for item in payload["results"])
+    assert all(item["probe_mode"] == "real" for item in payload["results"])
+    assert all(
+        item["skipped_reason"] == "missing_binary" for item in payload["results"]
+    )

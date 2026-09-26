@@ -38,6 +38,7 @@ PROXY_PREVIEW_KEYS = {
     "security",
     "source_ids",
     "remarks",
+    "probe_status",
 }
 ENDPOINT_PREVIEW_KEYS = {
     "item_id",
@@ -48,6 +49,7 @@ ENDPOINT_PREVIEW_KEYS = {
     "tls",
     "source_ids",
     "remarks",
+    "probe_status",
 }
 
 
@@ -185,7 +187,6 @@ def test_dry_run_flag_and_limits():
     assert dry_result["dry_run"] is True
     assert wet_result["dry_run"] is False
     assert dry_result["stages_pending"] == [
-        "probe",
         "inspect",
         "persist",
         "score",

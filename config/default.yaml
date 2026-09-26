@@ -26,12 +26,24 @@ probe:
     max_nodes: 100
     max_download_mb_each: 5
     speedtest_url: ""
+    mihomo_path: ""
+    api_timeout_s: 10
+    per_node_timeout_s: 20
+    total_deadline_s: 300
   cf:
     enabled: false
     concurrency: 20
     max_download_nodes: 20
     target_host: ""
     speedtest_url: ""
+    cfst_path: ""
+    tcp_timeout_s: 5
+    tls_timeout_s: 5
+    http_timeout_s: 5
+    total_deadline_s: 600
+    allowed_ports:
+      - 443
+    ip_family: "4"
 intelligence:
   reputation_enabled: false
 history:

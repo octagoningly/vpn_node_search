@@ -33,8 +33,9 @@ TOP_LEVEL_KEYS = {
     "source_reports",
     "issues",
     "items_preview",
+    "probe",
 }
-STAGES_PENDING = ["probe", "inspect", "persist", "score", "export", "publish"]
+STAGES_PENDING = ["inspect", "persist", "score", "export", "publish"]
 STATUSES = {"ok", "partial", "failed"}
 SNAKE_CASE = re.compile(r"^[a-z][a-z0-9_]*$")
 GENERATED_AT = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
