@@ -1,0 +1,205 @@
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+
+import pytest
+
+from nodebench.cli.main import DOCTOR_MESSAGE, STUB_MESSAGE, main
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+INPUT_DIR = PROJECT_ROOT / "input"
+
+URI_TEXT = (
+    "vless://123e4567-e89b-12d3-a456-426614174000@192.0.2.10:443"
+    "?type=tcp&security=tls&host=node.example.test#sample-192-0-2-10\n"
+    "trojan://sample-password@198.51.100.7:443?security=tls"
+    "?peer=edge.example.test#sample-198-51-100-7\n"
+)
+
+
+@pytest.fixture(autouse=True)
+def clean_env(monkeypatch):
+    for name in list(os.environ):
+        if name.startswith("NODEBENCH_"):
+            monkeypatch.delenv(name, raising=False)
+
+
+def write(path: Path, text: str) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(text.encode("utf-8"))
+    return path
+
+
+def read_report(output_dir: Path, name: str) -> dict:
+    matches = sorted(output_dir.glob(f"*/{name}"))
+    assert len(matches) == 1, f"expected exactly one {name} in {matches}"
+    return json.loads(matches[0].read_text(encoding="utf-8"))
+
+
+def test_doctor_passes_on_shipped_setup(capsys):
+    code = main(["doctor"])
+    out = capsys.readouterr()
+    assert code == 0
+    assert "[FAIL]" not in out.out
+    assert DOCTOR_MESSAGE in out.out
+    assert "[OK] python:" in out.out
+    assert "[OK] config:" in out.out
+    assert "[OK] input:" in out.out
+    assert "[OK] output:" in out.out
+
+
+def test_doctor_reports_missing_cf_target(monkeypatch, capsys):
+    monkeypatch.setenv("NODEBENCH_SOURCES__CF__ENABLED", "true")
+    code = main(["doctor"])
+    out = capsys.readouterr()
+    assert code == 2
+    assert "[FAIL] environment:" in out.out
+    assert "probe.cf.target_host" in out.out
+    assert DOCTOR_MESSAGE not in out.out
+
+
+def test_doctor_never_prints_secret_values(monkeypatch, capsys):
+    monkeypatch.setenv("NODEBENCH_GITHUB_TOKEN", "ghp_example_token_value")
+    code = main(["doctor"])
+    out = capsys.readouterr()
+    assert code == 0
+    assert "ghp_example_token_value" not in out.out
+    assert "nodebench_github_token: set" in out.out
+
+
+def test_run_dry_run_writes_report(tmp_path: Path, capsys):
+    source = write(tmp_path / "input" / "nodes.txt", URI_TEXT)
+    output_dir = tmp_path / "out"
+    code = main(
+        [
+            "run",
+            "--dry-run",
+            "--input",
+            str(source),
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    out = capsys.readouterr()
+    assert code == 0
+    assert "status=ok" in out.out
+    report = read_report(output_dir, "dry-run-report.json")
+    assert report["dry_run"] is True
+    assert report["status"] == "ok"
+    assert report["counts"]["proxy_nodes"] == 2
+    assert report["counts"]["edge_endpoints"] == 0
+    assert "sample-password" not in json.dumps(report)
+    assert not list(output_dir.glob("*/run-report.json"))
+
+
+def test_run_without_dry_run_writes_run_report(tmp_path: Path, capsys):
+    source = write(tmp_path / "input" / "nodes.txt", URI_TEXT)
+    output_dir = tmp_path / "out"
+    code = main(
+        ["run", "--input", str(source), "--output-dir", str(output_dir)]
+    )
+    capsys.readouterr()
+    assert code == 0
+    report = read_report(output_dir, "run-report.json")
+    assert report["dry_run"] is False
+    assert report["status"] == "ok"
+    assert not list(output_dir.glob("*/dry-run-report.json"))
+
+
+def test_run_rejects_config_error(monkeypatch, capsys, tmp_path: Path):
+    monkeypatch.setenv("NODEBENCH_SOURCES__CF__ENABLED", "true")
+    code = main(["run", "--dry-run", "--output-dir", str(tmp_path / "out")])
+    out = capsys.readouterr()
+    assert code == 2
+    assert "error [stage=config, code=cf_target_host_missing]:" in out.err
+    assert "probe.cf.target_host" in out.err
+    assert out.out == ""
+
+
+def test_run_fails_when_every_source_fails(tmp_path: Path, capsys):
+    output_dir = tmp_path / "out"
+    code = main(
+        [
+            "run",
+            "--dry-run",
+            "--input",
+            str(tmp_path / "absent.txt"),
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    capsys.readouterr()
+    assert code == 3
+    report = read_report(output_dir, "dry-run-report.json")
+    assert report["status"] == "failed"
+    assert report["source_reports"][0]["errors"][0]["code"] == "path_missing"
+
+
+def test_run_unknown_profile_fails(capsys):
+    code = main(["run", "--profile", "absent-profile"])
+    out = capsys.readouterr()
+    assert code == 2
+    assert "absent-profile.yaml" in out.err
+    assert out.out == ""
+
+
+def test_collect_prints_source_reports(tmp_path: Path, capsys):
+    source = write(tmp_path / "input" / "nodes.txt", URI_TEXT)
+    code = main(["collect", "--input", str(source)])
+    out = capsys.readouterr()
+    assert code == 0
+    assert "source local: ok=True fetched=1 errors=0" in out.out
+    assert "raw_items=1 proxy_nodes=2 edge_endpoints=0 issues=0 status=ok" in out.out
+
+
+def test_doctor_resolves_project_root_from_any_cwd(monkeypatch, tmp_path: Path, capsys):
+    monkeypatch.chdir(tmp_path)
+    code = main(["doctor"])
+    out = capsys.readouterr()
+    assert code == 0
+    assert "[OK] input: 6 sample files" in out.out
+    assert DOCTOR_MESSAGE in out.out
+
+
+def test_collect_resolves_relative_paths_against_cwd(
+    monkeypatch, tmp_path: Path, capsys
+):
+    monkeypatch.chdir(tmp_path)
+    code = main(["collect"])
+    out = capsys.readouterr()
+    assert code == 3
+    assert "path_missing" in out.out
+    assert "status=failed" in out.out
+
+
+def test_project_samples_stay_reachable():
+    assert len(list(INPUT_DIR.glob("*"))) == 6
+
+
+def test_stub_stage_is_not_implemented(capsys):
+    for name in ("probe", "inspect", "score", "export"):
+        code = main([name])
+        out = capsys.readouterr()
+        assert code == 0
+        assert STUB_MESSAGE in out.out
+
+
+def test_unknown_command_returns_two(capsys):
+    code = main(["nope"])
+    out = capsys.readouterr()
+    assert code == 2
+    assert "invalid choice" in out.err
+
+
+def test_help_returns_zero(capsys):
+    code = main(["--help"])
+    out = capsys.readouterr()
+    assert code == 0
+    assert "nodebench" in out.out
+    run_code = main(["run", "--help"])
+    run_out = capsys.readouterr()
+    assert run_code == 0
+    assert "--dry-run" in run_out.out
+    assert "--output-dir" in run_out.out
