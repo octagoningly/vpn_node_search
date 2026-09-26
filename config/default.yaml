@@ -1,0 +1,43 @@
+profile: local
+runner_id: local:desktop-a
+sources:
+  local:
+    enabled: true
+    paths:
+      - input/
+  subscriptions:
+    enabled: false
+    urls: []
+  github:
+    enabled: false
+    allowed_repositories: []
+    queries:
+      - '"vless://" filename:sub.txt'
+    max_files_per_run: 30
+    cache_ttl_hours: 24
+  cf:
+    enabled: false
+    candidate_files: []
+    max_ips_per_run: 200
+probe:
+  proxy:
+    enabled: true
+    concurrency: 10
+    max_nodes: 100
+    max_download_mb_each: 5
+    speedtest_url: ""
+  cf:
+    enabled: false
+    concurrency: 20
+    max_download_nodes: 20
+    target_host: ""
+    speedtest_url: ""
+intelligence:
+  reputation_enabled: false
+history:
+  days: 14
+publish:
+  enabled: false
+  allow_proxy_credentials: false
+budget: {}
+output_dir: output

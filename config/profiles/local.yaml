@@ -1,0 +1,7 @@
+profile: local
+sources:
+  local:
+    enabled: true
+probe:
+  proxy:
+    enabled: true

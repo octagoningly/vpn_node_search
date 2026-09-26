@@ -1,0 +1,4 @@
+profile: github
+sources:
+  github:
+    enabled: true

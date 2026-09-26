@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "nodebench"
+version = "0.1.0"
+description = "Bounded collection, probing and reporting of authorized proxy nodes and Cloudflare edge endpoints"
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.10,<3",
+    "PyYAML>=6.0.2,<7",
+]
+
+[project.scripts]
+nodebench = "nodebench.cli.main:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3,<9",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/nodebench"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+pythonpath = ["src"]

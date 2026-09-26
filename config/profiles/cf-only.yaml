@@ -1,0 +1,6 @@
+profile: cf-only
+probe:
+  proxy:
+    enabled: false
+  cf:
+    enabled: false

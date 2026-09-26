@@ -1,0 +1,19 @@
+sources:
+  local:
+    enabled: true
+    paths:
+      - input/
+  subscriptions:
+    enabled: false
+    urls: []
+  github:
+    enabled: false
+    allowed_repositories: []
+    queries:
+      - '"vless://" filename:sub.txt'
+    max_files_per_run: 30
+    cache_ttl_hours: 24
+  cf:
+    enabled: false
+    candidate_files: []
+    max_ips_per_run: 200

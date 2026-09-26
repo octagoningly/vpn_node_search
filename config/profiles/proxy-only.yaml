@@ -1,0 +1,7 @@
+profile: proxy-only
+sources:
+  cf:
+    enabled: false
+probe:
+  cf:
+    enabled: false
