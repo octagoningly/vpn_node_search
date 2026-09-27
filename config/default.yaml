@@ -71,6 +71,7 @@ scoring:
 publish:
   enabled: false
   allow_proxy_credentials: false
+  cf_candidates_authorized: false
 scheduler:
   enabled: true
   default_time: "04:37"

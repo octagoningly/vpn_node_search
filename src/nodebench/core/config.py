@@ -279,10 +279,19 @@ class ScoringConfig(BaseModel):
 
 
 class PublishConfig(BaseModel):
+    """Gates for the public ``output/latest`` directory.
+
+    ``allow_proxy_credentials`` releases proxy credential files into the
+    public directory, and ``cf_candidates_authorized`` explicitly allows
+    publishing files built from user imported CF candidates. Both default to
+    False, as does ``enabled``.
+    """
+
     model_config = ConfigDict(extra="forbid")
 
     enabled: bool = False
     allow_proxy_credentials: bool = False
+    cf_candidates_authorized: bool = False
 
 
 class SchedulerConfig(BaseModel):

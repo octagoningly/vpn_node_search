@@ -38,7 +38,7 @@ def test_single_ip_file_produces_one_endpoint_item(tmp_path: Path):
     assert item.source_id == "cf"
     assert item.content_type == "text"
     assert item.payload == "192.0.2.7:443"
-    assert item.license_tag == "operator-supplied"
+    assert item.license_tag == "user_supplied"
     assert item.source_ref == "input/cf.txt"
     report = reports[0]
     assert report.source_id == "cf"

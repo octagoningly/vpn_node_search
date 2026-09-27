@@ -5,12 +5,14 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from nodebench.core.schema import (
+    PRIVATE_VISIBILITY,
     EdgeEndpoint,
     ExportOutcome,
     ExportedFile,
     ProxyNode,
     RankedEndpoint,
     RankedProxy,
+    USER_SUPPLIED_LICENSE_TAGS,
     ValidationReport,
 )
 from nodebench.core.serialization import dumps_json, public_dump, write_json_atomic
@@ -48,9 +50,29 @@ def _failed(directory: Path, code: str) -> ExportOutcome:
 
 
 def stage_view(outcome: ExportOutcome) -> dict[str, Any]:
+    """Render the export stage summary for the run report.
+
+    The export directory is machine-private, so its summary carries
+    ``visibility: private``; only the publish stage is marked public.
+    """
     data = public_dump(outcome)
     data.pop("files", None)
+    data["visibility"] = PRIVATE_VISIBILITY
     return data
+
+
+def user_supplied_candidates(report: Mapping[str, Any]) -> bool:
+    """Return True when the run report records user imported CF candidates."""
+    entries = report.get("licenses")
+    if not isinstance(entries, (list, tuple)):
+        return False
+    for entry in entries:
+        if not isinstance(entry, Mapping):
+            continue
+        tag = str(entry.get("license_tag") or "").strip().lower()
+        if tag in USER_SUPPLIED_LICENSE_TAGS:
+            return True
+    return False
 
 
 def _hashed(name: str, payload: bytes, entry_count: int) -> ExportedFile:
@@ -91,7 +113,14 @@ def build_export(
     endpoints: Sequence[RankedEndpoint],
     scoring_version: str,
     region_by_item: Mapping[str, str] | None = None,
+    cf_candidates_authorized: bool = False,
 ) -> ExportOutcome:
+    """Write the private export directory for one run and describe it.
+
+    The directory under ``output/<run_id>/export`` is machine-private: it
+    always holds every exported file, including proxy credentials, and is
+    never filtered by the publish gates.
+    """
     out_dir = Path(directory)
     try:
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -99,6 +128,7 @@ def build_export(
         return _failed(out_dir, "mkdir_failed")
 
     regions = region_by_item or {}
+    cf_user_supplied = user_supplied_candidates(report)
     node_by_id = {node.item_id: node for node in nodes}
     edge_by_id = {edge.item_id: edge for edge in edges}
     ranked_proxies = sorted(
@@ -243,7 +273,14 @@ def build_export(
     ]
 
     manifest = _build_manifest(
-        report, scoring_version, validation, publishable, entries, counts
+        report,
+        scoring_version,
+        validation,
+        publishable,
+        entries,
+        counts,
+        cf_user_supplied,
+        cf_candidates_authorized,
     )
     manifest_payload = dumps_json(manifest).encode("utf-8")
     manifest_errors = scan_text(MANIFEST_NAME, manifest_payload.decode("utf-8"))
@@ -268,7 +305,14 @@ def build_export(
         report_payload = report_bytes(stage_report)
         entries[4] = _hashed(REPORT_NAME, report_payload, 0)
         manifest = _build_manifest(
-            report, scoring_version, validation, publishable, entries, counts
+            report,
+            scoring_version,
+            validation,
+            publishable,
+            entries,
+            counts,
+            cf_user_supplied,
+            cf_candidates_authorized,
         )
         manifest_payload = dumps_json(manifest).encode("utf-8")
 
@@ -295,6 +339,8 @@ def _build_manifest(
     publishable: bool,
     entries: list[ExportedFile],
     counts: dict[str, int],
+    cf_candidates_user_supplied: bool,
+    cf_candidates_authorized: bool,
 ) -> dict[str, Any]:
     return build_manifest(
         schema_version=int(report.get("schema_version", 1)),
@@ -308,4 +354,6 @@ def _build_manifest(
         publishable=publishable,
         files=entries,
         counts=counts,
+        cf_candidates_user_supplied=cf_candidates_user_supplied,
+        cf_candidates_authorized=cf_candidates_authorized,
     )

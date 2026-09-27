@@ -202,6 +202,7 @@ def run_export_stage(
         proxies=score_report.proxies,
         endpoints=score_report.endpoints,
         scoring_version=SCORING_VERSION,
+        cf_candidates_authorized=bool(config.publish.cf_candidates_authorized),
     )
 
 
@@ -248,6 +249,7 @@ def run_publish_stage(
             enabled=bool(config.publish.enabled),
             allow_publish=bool(allow_publish),
             allow_proxy_credentials=bool(config.publish.allow_proxy_credentials),
+            cf_candidates_authorized=bool(config.publish.cf_candidates_authorized),
         )
     )
 
@@ -439,6 +441,7 @@ def export_artifacts(config: AppConfig, run_id: str) -> ExportOutcome:
         proxies=score_report.proxies,
         endpoints=score_report.endpoints,
         scoring_version=SCORING_VERSION,
+        cf_candidates_authorized=bool(config.publish.cf_candidates_authorized),
     )
 
 

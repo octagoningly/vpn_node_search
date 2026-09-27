@@ -53,7 +53,9 @@ def test_default_yaml_loads():
     assert config.probe.cf.target_host == "octagoningly-vpn.pages.dev"
     assert config.probe.cf.speedtest_url == ""
     assert config.history.days == 14
+    assert config.publish.enabled is False
     assert config.publish.allow_proxy_credentials is False
+    assert config.publish.cf_candidates_authorized is False
 
 
 @pytest.mark.parametrize("name", ["local", "github", "cf-only", "proxy-only"])

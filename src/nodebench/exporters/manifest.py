@@ -35,7 +35,15 @@ def build_manifest(
     publishable: bool,
     files: Iterable[Any],
     counts: Mapping[str, int],
+    cf_candidates_user_supplied: bool = False,
+    cf_candidates_authorized: bool = False,
 ) -> dict[str, Any]:
+    """Build a manifest payload describing one export or publish directory.
+
+    ``cf_candidates_user_supplied`` reports whether user imported CF
+    candidates feed the endpoint files, and ``cf_candidates_authorized``
+    records whether publishing them was explicitly authorized.
+    """
     entries = sorted((_entry(item) for item in files), key=lambda entry: entry["name"])
     return {
         "schema_version": int(schema_version),
@@ -47,6 +55,8 @@ def build_manifest(
         "scoring_version": scoring_version,
         "validation": validation,
         "publishable": publishable,
+        "cf_candidates_user_supplied": bool(cf_candidates_user_supplied),
+        "cf_candidates_authorized": bool(cf_candidates_authorized),
         "files": entries,
         "counts": dict(counts),
     }

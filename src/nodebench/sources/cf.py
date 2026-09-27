@@ -6,11 +6,10 @@ from pathlib import Path
 from typing import Any
 
 from nodebench.core.config import AppConfig, CfSourceConfig
-from nodebench.core.schema import ErrorInfo, RawItem, SourceReport
+from nodebench.core.schema import USER_SUPPLIED_LICENSE_TAG, ErrorInfo, RawItem, SourceReport
 from nodebench.sources.base import BOM, make_error, resolve_base_dir
 
 SOURCE_ID = "cf"
-DEFAULT_LICENSE = "operator-supplied"
 DEFAULT_PORT = 443
 MAX_CF_FILE_BYTES = 2 * 1024 * 1024
 TRUNCATION_CODE = "ip_limit_exceeded"
@@ -29,14 +28,6 @@ def _display_path(path: Path, base: Path) -> str:
         return path.resolve().relative_to(base.resolve()).as_posix()
     except ValueError:
         return path.name
-
-
-def _license_tag(source: CfSourceConfig) -> str:
-    for name in ("license", "license_tag"):
-        value = getattr(source, name, None)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    return DEFAULT_LICENSE
 
 
 def _default_port(source: CfSourceConfig) -> int:
@@ -292,7 +283,7 @@ def collect_cf(
     base = resolve_base_dir(ctx, base_dir)
     limit = max(int(source.max_ips_per_run), 0)
     default_port = _default_port(source)
-    license_tag = _license_tag(source)
+    license_tag = USER_SUPPLIED_LICENSE_TAG
     resolved: list[tuple[Path, str]] = []
     for raw in source.candidate_files:
         path = Path(raw)
@@ -348,7 +339,7 @@ def collect_cf(
 
 __all__ = [
     "SOURCE_ID",
-    "DEFAULT_LICENSE",
+    "USER_SUPPLIED_LICENSE_TAG",
     "DEFAULT_PORT",
     "MAX_CF_FILE_BYTES",
     "TRUNCATION_CODE",

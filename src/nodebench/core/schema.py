@@ -13,6 +13,13 @@ FINGERPRINT_VERSION = 1
 
 RUN_ID_PATTERN = r"^\d{8}T\d{6}Z-[0-9a-f]{6}$"
 
+USER_SUPPLIED_LICENSE_TAG = "user_supplied"
+USER_SUPPLIED_LICENSE_TAGS = frozenset(
+    {USER_SUPPLIED_LICENSE_TAG, "not_licensed_user_supplied"}
+)
+PRIVATE_VISIBILITY = "private"
+PUBLIC_VISIBILITY = "public"
+
 
 class Status(str, Enum):
     OK = "ok"
@@ -603,16 +610,27 @@ class ExportOutcome(BaseModel):
 
 
 class PublishResult(BaseModel):
+    """Outcome of publishing the public candidate directory.
+
+    ``visibility`` is always ``public`` because this result describes the
+    shared ``output/latest`` directory; the private export directory is
+    tracked separately through the export stage view.
+    """
+
     model_config = ConfigDict(extra="forbid")
 
     status: Literal["ok", "skipped", "blocked", "failed"]
     reason: str = ""
     path: str = ""
+    visibility: Literal["public"] = "public"
     files: list[str] = Field(default_factory=list)
     blocked: list[str] = Field(default_factory=list)
     excluded: list[str] = Field(default_factory=list)
+    excluded_reasons: dict[str, str] = Field(default_factory=dict)
     errors: list[str] = Field(default_factory=list)
     replaced_previous: bool = False
+    cf_candidates_user_supplied: bool = False
+    cf_candidates_authorized: bool = False
 
 
 def assert_probe_real(result: Any) -> None:
@@ -639,6 +657,10 @@ __all__ = [
     "SCHEMA_VERSION",
     "FINGERPRINT_VERSION",
     "RUN_ID_PATTERN",
+    "USER_SUPPLIED_LICENSE_TAG",
+    "USER_SUPPLIED_LICENSE_TAGS",
+    "PRIVATE_VISIBILITY",
+    "PUBLIC_VISIBILITY",
     "Status",
     "Kind",
     "ErrorInfo",
