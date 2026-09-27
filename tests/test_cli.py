@@ -245,7 +245,7 @@ def test_stub_stage_is_not_implemented(capsys):
     code = main(["inspect"])
     out = capsys.readouterr()
     assert code == 0
-    assert STUB_MESSAGE in out.out
+    assert "Usage: nodebench inspect --run-id" in out.out
 
 
 def test_unknown_command_returns_two(capsys):

@@ -1,0 +1,45 @@
+name: NodeBench Offline Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/prefix-dev/uv:python3.12
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up UV
+        uses:astral/setup-uv@v3
+        with:
+          # Pin to the same Python version as the project
+          python-version: "3.12"
+          # Enable project-linking for faster installs
+          cache: "poetry"
+
+      - name: Install dependencies
+        run: |
+          uv sync --frozen
+
+      - name: Run offline contract tests
+        run: |
+          uv run pytest -q --ignore=tests/test_cli.py --ignore=tests/test_scheduler_service.py
+
+      - name: Run CLI smoke tests (offline only)
+        run: |
+          uv run nodebench doctor
+          uv run nodebench run --profile local --dry-run
+
+      - name: Verify binary presence (informational)
+        run: |
+          Write-Host "Mihomo and CloudflareSpeedTest binaries are user-provided; ensure they are available at configured paths or via `tools/` directory."
+          if (-Not (Test-Path "tools")) { Write-Host "Note: `tools/` directory not found; install Mihomo/CloudflareSpeedTest there if needed." }
