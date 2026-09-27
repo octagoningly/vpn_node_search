@@ -262,7 +262,9 @@ def test_resolve_run_exit_strict_gate():
         resolve_run_exit(strict=True, probe={"proxy": SKIPPED_MISSING_NODE})
         == EXIT_PROBE_OR_STORAGE
     )
-    assert resolve_run_exit(probe={"proxy": SKIPPED_MISSING_NODE}) == EXIT_OK
+    assert resolve_run_exit(probe={"proxy": SKIPPED_MISSING_NODE}) == (
+        EXIT_PROBE_OR_STORAGE
+    )
     for reason in ("disabled", "dry_run", "not_run"):
         node = {"mode": "skip", "skipped_reason": reason}
         assert resolve_run_exit(strict=True, probe={"proxy": node}) == EXIT_OK
@@ -416,6 +418,8 @@ def test_pipeline_wet_run_missing_binary_degrades(tmp_path: Path):
     assert len(sink) == 1
     assert sink[0].status is ProbeStatus.SKIPPED
     assert sink[0].skipped_reason == "missing_binary"
+    assert sink[0].probe_mode is ProbeMode.NOT_RUN
+    assert sink[0].attempts == 0
     assert all(
         preview["probe_status"] == "skipped"
         for preview in result["items_preview"]["proxy_nodes"]
@@ -427,4 +431,55 @@ def test_pipeline_wet_run_missing_binary_degrades(tmp_path: Path):
     lenient_code = resolve_run_exit(
         run_status=str(result["status"]), probe=result["probe"]
     )
-    assert lenient_code == EXIT_OK
+    assert lenient_code == EXIT_PROBE_OR_STORAGE
+
+
+def test_resolve_run_exit_critical_skip_reasons():
+    for reason in ("missing_binary", "missing_target_host"):
+        node = {"mode": "skip", "skipped_reason": reason}
+        assert resolve_run_exit(probe={"proxy": node}) == EXIT_PROBE_OR_STORAGE
+        assert (
+            resolve_run_exit(strict=True, probe={"cf": node})
+            == EXIT_PROBE_OR_STORAGE
+        )
+        assert (
+            resolve_run_exit(run_status="failed", probe={"cf": node})
+            == EXIT_PROBE_OR_STORAGE
+        )
+
+
+def test_resolve_run_exit_non_critical_skip_reasons():
+    for reason in (
+        "disabled",
+        "dry_run",
+        "not_run",
+        "no_candidates",
+        "missing_speedtest_url",
+        "budget_exhausted",
+        "probe_limit_exceeded",
+    ):
+        node = {"mode": "skip", "skipped_reason": reason}
+        assert resolve_run_exit(probe={"proxy": node}) == EXIT_OK
+    for reason in ("disabled", "dry_run", "not_run"):
+        node = {"mode": "skip", "skipped_reason": reason}
+        assert resolve_run_exit(strict=True, probe={"proxy": node}) == EXIT_OK
+    for reason in (
+        "missing_speedtest_url",
+        "budget_exhausted",
+        "probe_limit_exceeded",
+        "no_candidates",
+    ):
+        node = {"mode": "skip", "skipped_reason": reason}
+        assert (
+            resolve_run_exit(strict=True, probe={"proxy": node})
+            == EXIT_PROBE_OR_STORAGE
+        )
+
+
+def test_collect_only_pipeline_exits_zero(tmp_path: Path):
+    config = pipeline_config(tmp_path)
+    result, sink = run(config, run_probes=False)
+    assert sink == []
+    assert result["probe"]["proxy"]["skipped_reason"] == "not_run"
+    code = resolve_run_exit(run_status=str(result["status"]), probe=result["probe"])
+    assert code == EXIT_OK

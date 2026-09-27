@@ -50,7 +50,7 @@ def test_default_yaml_loads():
     assert config.probe.proxy.enabled is True
     assert config.probe.proxy.speedtest_url == ""
     assert config.probe.cf.enabled is False
-    assert config.probe.cf.target_host == ""
+    assert config.probe.cf.target_host == "octagoningly-vpn.pages.dev"
     assert config.probe.cf.speedtest_url == ""
     assert config.history.days == 14
     assert config.publish.allow_proxy_credentials is False

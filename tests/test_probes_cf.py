@@ -8,7 +8,7 @@ import pytest
 
 from nodebench.core.config import AppConfig, load_config
 from nodebench.core.errors import ProbeError
-from nodebench.core.schema import FailureStage, ProbeStatus
+from nodebench.core.schema import FailureStage, ProbeMode, ProbeStatus
 from nodebench.probes import (
     REASON_DISABLED,
     REASON_LIMIT_EXCEEDED,
@@ -160,6 +160,8 @@ def test_probe_without_binary_skips(tmp_path: Path):
     result = prober.probe(sample_target())
     assert result.status is ProbeStatus.SKIPPED
     assert result.skipped_reason == REASON_MISSING_BINARY
+    assert result.probe_mode is ProbeMode.NOT_RUN
+    assert result.attempts == 0
     assert result.backend == "cfst"
 
 
@@ -167,6 +169,7 @@ def test_probe_ok_without_metrics(tmp_path: Path):
     prober = make_prober(tmp_path, binary="fake-cfst", check=passing_check)
     result = prober.probe(sample_target())
     assert result.status is ProbeStatus.OK
+    assert result.probe_mode is ProbeMode.REAL
     assert result.failure_stage is FailureStage.UNKNOWN
     assert result.attempts == 1
     assert result.timeouts == 0

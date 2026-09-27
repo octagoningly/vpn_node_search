@@ -187,6 +187,7 @@ class FailureStage(str, Enum):
 class ProbeMode(str, Enum):
     REAL = "real"
     SIMULATED = "simulated"
+    NOT_RUN = "not_run"
 
 
 PROBE_ERROR_CODES = frozenset(

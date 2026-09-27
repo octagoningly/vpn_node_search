@@ -34,7 +34,7 @@ probe:
     enabled: false
     concurrency: 20
     max_download_nodes: 20
-    target_host: ""
+    target_host: octagoningly-vpn.pages.dev
     speedtest_url: ""
     cfst_path: ""
     tcp_timeout_s: 5

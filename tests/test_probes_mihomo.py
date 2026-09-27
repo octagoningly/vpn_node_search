@@ -187,11 +187,12 @@ def test_build_mihomo_config_shape():
     assert [proxy["name"] for proxy in config["proxies"]] == ["node"]
 
 
-def test_skip_result_is_real_mode_with_reason(tmp_path: Path):
+def test_skip_result_is_not_run_mode_with_reason(tmp_path: Path):
     result = make_prober(tmp_path).skip(sample_target(), REASON_MISSING_BINARY)
     assert result.status is ProbeStatus.SKIPPED
     assert result.skipped_reason == REASON_MISSING_BINARY
-    assert result.probe_mode is ProbeMode.REAL
+    assert result.probe_mode is ProbeMode.NOT_RUN
+    assert result.attempts == 0
     assert result.failure_stage is FailureStage.UNKNOWN
     assert result.backend == "mihomo"
     assert result.error_code == ""
@@ -233,6 +234,7 @@ def test_entry_only_path_measures_then_parks_pending(tmp_path: Path):
         thread.join(timeout=2)
     assert result.status is ProbeStatus.SKIPPED
     assert result.skipped_reason == REASON_MISSING_SPEEDTEST_URL
+    assert result.probe_mode is ProbeMode.NOT_RUN
     assert result.dns_ms == 0.4
     assert result.tcp_ms is not None
     assert result.tcp_ms >= 0.0

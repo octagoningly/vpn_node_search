@@ -80,13 +80,14 @@ def proxy_result(
     latency: float | None = 120.0,
     exit_ip: str = "203.0.113.9",
     skipped_reason: str = "",
+    probe_mode: ProbeMode = ProbeMode.REAL,
 ) -> ProxyProbeResult:
     return ProxyProbeResult(
         run_id=run_id,
         runner_id="local:desktop-a",
         measured_at=measured_at,
         status=status,
-        probe_mode=ProbeMode.REAL,
+        probe_mode=probe_mode,
         backend="mihomo",
         skipped_reason=skipped_reason,
         attempts=1 if status is not ProbeStatus.SKIPPED else 0,
@@ -336,6 +337,36 @@ def test_skipped_results_do_not_count_as_executed(tmp_path: Path):
         assert summary.executed == 0
         assert summary.succeeded == 0
         assert summary.availability_rate is None
+    finally:
+        conn.close()
+
+
+def test_skipped_result_persists_not_run_probe_mode(tmp_path: Path):
+    db_path = tmp_path / "nodebench.db"
+    persist(
+        db_path,
+        run_id=RUN1,
+        now=NOW,
+        results=[
+            proxy_result(
+                status=ProbeStatus.SKIPPED,
+                latency=None,
+                exit_ip="",
+                skipped_reason="missing_binary",
+                probe_mode=ProbeMode.NOT_RUN,
+            )
+        ],
+    )
+    conn = open_db(db_path)
+    try:
+        row = conn.execute(
+            "SELECT status, probe_mode, attempts, skipped_reason "
+            "FROM probe_observations WHERE item_id='node-1'"
+        ).fetchone()
+        assert row["status"] == "skipped"
+        assert row["probe_mode"] == "not_run"
+        assert row["attempts"] == 0
+        assert row["skipped_reason"] == "missing_binary"
     finally:
         conn.close()
 

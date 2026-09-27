@@ -784,7 +784,13 @@ class MihomoProber:
     def _make(self, target: ProxyTarget, *, status: ProbeStatus, **kwargs: Any) -> ProxyProbeResult:
         notes = kwargs.pop("notes", None)
         failure_stage = kwargs.pop("failure_stage", FailureStage.UNKNOWN)
-        probe_mode = kwargs.pop("probe_mode", ProbeMode.REAL)
+        probe_mode = kwargs.pop("probe_mode", None)
+        if probe_mode is None:
+            probe_mode = (
+                ProbeMode.NOT_RUN
+                if status is ProbeStatus.SKIPPED
+                else ProbeMode.REAL
+            )
         skipped_reason = kwargs.pop("skipped_reason", "")
         attempts = int(kwargs.pop("attempts", 0))
         timeouts = int(kwargs.pop("timeouts", 0))

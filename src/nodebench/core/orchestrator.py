@@ -25,6 +25,8 @@ from nodebench.probes import (
     MIHOMO_BINARY_NAMES,
     REASON_DISABLED,
     REASON_DRY_RUN,
+    REASON_MISSING_BINARY,
+    REASON_MISSING_TARGET_HOST,
     REASON_NO_CANDIDATES,
     REASON_NOT_RUN,
     MihomoProber,
@@ -46,6 +48,7 @@ PENDING_STAGES = ("inspect", "persist", "score", "export", "publish")
 SOURCE_NAMES = ("local", "subscriptions", "github", "cf")
 TRUNCATION_CODES = frozenset({"ip_limit_exceeded", "file_limit_exceeded"})
 STRICT_EXEMPT_REASONS = frozenset({REASON_DISABLED, REASON_DRY_RUN, REASON_NOT_RUN})
+CRITICAL_SKIP_REASONS = frozenset({REASON_MISSING_BINARY, REASON_MISSING_TARGET_HOST})
 PREVIEW_LIMIT = 20
 PROXY_PREVIEW_FIELDS = (
     "item_id",
@@ -408,6 +411,11 @@ def resolve_run_exit(
             and int(node.get("usable_real", 0)) == 0
             and int(node.get("failed", 0)) + int(node.get("timeout", 0)) > 0
         ):
+            return EXIT_PROBE_OR_STORAGE
+    for node in (probe or {}).values():
+        if node.get("mode") == "skip" and str(
+            node.get("skipped_reason") or ""
+        ) in CRITICAL_SKIP_REASONS:
             return EXIT_PROBE_OR_STORAGE
     if run_status == "failed":
         return EXIT_SOURCES

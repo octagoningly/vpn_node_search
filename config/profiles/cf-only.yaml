@@ -1,6 +1,15 @@
 profile: cf-only
+sources:
+  cf:
+    enabled: true
+    candidate_files:
+      - input/cf-candidates.txt
+    max_ips_per_run: 200
 probe:
   proxy:
     enabled: false
   cf:
-    enabled: false
+    enabled: true
+    target_host: octagoningly-vpn.pages.dev
+    allowed_ports:
+      - 443

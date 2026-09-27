@@ -97,6 +97,7 @@ def test_doctor_reports_pending_when_speedtest_url_missing(
 
 def test_doctor_reports_missing_cf_target(monkeypatch, capsys):
     monkeypatch.setenv("NODEBENCH_SOURCES__CF__ENABLED", "true")
+    monkeypatch.setenv("NODEBENCH_PROBE__CF__TARGET_HOST", "")
     code = main(["doctor"])
     out = capsys.readouterr()
     assert code == 2
@@ -152,7 +153,7 @@ def test_run_without_dry_run_writes_run_report(
         ["run", "--input", str(source), "--output-dir", str(output_dir)]
     )
     capsys.readouterr()
-    assert code == 0
+    assert code == 4
     report = read_report(output_dir, "run-report.json")
     assert report["dry_run"] is False
     assert report["status"] == "partial"
@@ -161,10 +162,15 @@ def test_run_without_dry_run_writes_run_report(
     assert proxy["skipped_reason"] == "missing_binary"
     assert len(list(output_dir.glob("*/probe-results.json"))) == 1
     assert not list(output_dir.glob("*/dry-run-report.json"))
+    payload = json.loads(
+        list(output_dir.glob("*/probe-results.json"))[0].read_text(encoding="utf-8")
+    )
+    assert all(item["probe_mode"] == "not_run" for item in payload["results"])
 
 
 def test_run_rejects_config_error(monkeypatch, capsys, tmp_path: Path):
     monkeypatch.setenv("NODEBENCH_SOURCES__CF__ENABLED", "true")
+    monkeypatch.setenv("NODEBENCH_PROBE__CF__TARGET_HOST", "")
     code = main(["run", "--dry-run", "--output-dir", str(tmp_path / "out")])
     out = capsys.readouterr()
     assert code == 2
@@ -303,7 +309,7 @@ def test_probe_command_prints_summary_and_writes_results(
         ]
     )
     out = capsys.readouterr()
-    assert code == 0
+    assert code == 4
     assert (
         "probe proxy: mode=skip backend=mihomo attempted=0 ok=0 usable_real=0 "
         "skipped=2 reason=missing_binary" in out.out
@@ -320,7 +326,109 @@ def test_probe_command_prints_summary_and_writes_results(
     assert payload["schema_version"] == 1
     assert len(payload["results"]) == 2
     assert all(item["status"] == "skipped" for item in payload["results"])
-    assert all(item["probe_mode"] == "real" for item in payload["results"])
+    assert all(item["probe_mode"] == "not_run" for item in payload["results"])
     assert all(
         item["skipped_reason"] == "missing_binary" for item in payload["results"]
     )
+
+
+def test_run_cf_only_profile_executes_cf_branch(
+    tmp_path: Path, capsys, monkeypatch
+):
+    monkeypatch.chdir(PROJECT_ROOT)
+    monkeypatch.setenv(
+        "NODEBENCH_PROBE__CF__CFST_PATH", str(tmp_path / "absent-cfst")
+    )
+    output_dir = tmp_path / "out"
+    code = main(["run", "--profile", "cf-only", "--output-dir", str(output_dir)])
+    capsys.readouterr()
+    assert code == 4
+    report = read_report(output_dir, "run-report.json")
+    assert report["profile"] == "cf-only"
+    assert report["dry_run"] is False
+    assert report["probe"]["proxy"]["mode"] == "skip"
+    assert report["probe"]["proxy"]["skipped_reason"] == "disabled"
+    cf = report["probe"]["cf"]
+    assert cf["mode"] == "skip"
+    assert cf["skipped_reason"] == "missing_binary"
+    assert cf["attempted"] == 0
+    assert cf["ok"] == 0
+    assert report["counts"]["edge_endpoints"] > 0
+    payloads = list(output_dir.glob("*/probe-results.json"))
+    assert len(payloads) == 1
+    payload = json.loads(payloads[0].read_text(encoding="utf-8"))
+    assert payload["results"]
+    assert all(item["backend"] == "cfst" for item in payload["results"])
+    assert all(item["status"] == "skipped" for item in payload["results"])
+    assert all(item["probe_mode"] == "not_run" for item in payload["results"])
+    assert all(item["attempts"] == 0 for item in payload["results"])
+    assert not list(output_dir.glob("*/dry-run-report.json"))
+
+
+def test_run_cf_only_profile_dry_run_exits_zero(
+    tmp_path: Path, capsys, monkeypatch
+):
+    monkeypatch.chdir(PROJECT_ROOT)
+    output_dir = tmp_path / "out"
+    code = main(
+        [
+            "run",
+            "--profile",
+            "cf-only",
+            "--dry-run",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    capsys.readouterr()
+    assert code == 0
+    report = read_report(output_dir, "dry-run-report.json")
+    assert report["status"] in {"ok", "partial"}
+    assert report["probe"]["proxy"]["skipped_reason"] == "dry_run"
+    assert report["probe"]["cf"]["skipped_reason"] == "dry_run"
+    assert not list(output_dir.glob("*/probe-results.json"))
+
+
+def test_run_id_help_marks_read_restore_only(capsys):
+    assert main(["run", "--help"]) == 0
+    run_help = capsys.readouterr().out
+    assert "--run-id" in run_help
+    assert "仅用于读取/恢复指定 run，不用于重复测量" in run_help
+    assert main(["probe", "--help"]) == 0
+    probe_help = capsys.readouterr().out
+    assert "--run-id" in probe_help
+    assert "仅用于读取/恢复指定 run，不用于重复测量" in probe_help
+
+
+def test_run_id_defaults_to_a_fresh_run_id(tmp_path: Path, capsys, monkeypatch):
+    source = write(tmp_path / "input" / "nodes.txt", URI_TEXT)
+    first_dir = tmp_path / "out-one"
+    second_dir = tmp_path / "out-two"
+    main(["run", "--dry-run", "--input", str(source), "--output-dir", str(first_dir)])
+    capsys.readouterr()
+    main(["run", "--dry-run", "--input", str(source), "--output-dir", str(second_dir)])
+    capsys.readouterr()
+    first = read_report(first_dir, "dry-run-report.json")
+    second = read_report(second_dir, "dry-run-report.json")
+    assert first["run_id"] != second["run_id"]
+
+
+def test_run_reuses_explicit_run_id(tmp_path: Path, capsys):
+    source = write(tmp_path / "input" / "nodes.txt", URI_TEXT)
+    output_dir = tmp_path / "out"
+    code = main(
+        [
+            "run",
+            "--dry-run",
+            "--run-id",
+            "20260101T000000Z-abcdef",
+            "--input",
+            str(source),
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    capsys.readouterr()
+    assert code == 0
+    report = read_report(output_dir, "dry-run-report.json")
+    assert report["run_id"] == "20260101T000000Z-abcdef"

@@ -635,7 +635,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="check source scope and budget without probing",
     )
-    run_parser.add_argument("--run-id", default=None, help="reuse an existing run id")
+    run_parser.add_argument(
+        "--run-id",
+        default=None,
+        help="reuse an existing run id; 仅用于读取/恢复指定 run，不用于重复测量",
+    )
     run_parser.add_argument("--input", default=None, help="input file or directory")
     run_parser.add_argument(
         "--output-dir", default=None, help="directory that receives run reports"
@@ -677,7 +681,11 @@ def build_parser() -> argparse.ArgumentParser:
         ("export", _cmd_export),
     ):
         stage_parser = subparsers.add_parser(name, help=f"{name} stage")
-        stage_parser.add_argument("--run-id", default=None, help="upstream run id")
+        stage_parser.add_argument(
+            "--run-id",
+            default=None,
+            help="upstream run id; 仅用于读取/恢复指定 run，不用于重复测量",
+        )
         stage_parser.add_argument("--input", default=None, help="upstream artifact")
         if name in ("collect", "probe"):
             stage_parser.add_argument("--profile", default=None, help="profile name")

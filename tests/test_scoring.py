@@ -257,6 +257,10 @@ class TestProxyScoring:
         report = run_score(nodes=(make_node(),), results=(skipped,))
         assert report.proxies[0].status == "pending"
         assert report.proxies[0].pending == ["probe"]
+        skipped.probe_mode = ProbeMode.NOT_RUN
+        report = run_score(nodes=(make_node(),), results=(skipped,))
+        assert report.proxies[0].status == "pending"
+        assert report.proxies[0].pending == ["probe"]
 
     def test_measured_failure_is_filtered_probe(self) -> None:
         failed = ProxyProbeResult(
@@ -289,6 +293,20 @@ class TestProxyScoring:
         report = run_score(
             nodes=(make_node(),), results=(simulated,), scoring=relaxed
         )
+        assert report.proxies[0].status == "ranked"
+
+    def test_not_run_mode_filtered_when_real_required(self) -> None:
+        not_run = make_ok_result()
+        not_run.probe_mode = ProbeMode.NOT_RUN
+        report = run_score(nodes=(make_node(),), results=(not_run,))
+        item = report.proxies[0]
+        assert item.status == "filtered"
+        assert item.filters_failed == ["probe_mode"]
+
+        relaxed = ScoringConfig(
+            filters=ScoringFilters(require_real_probe_success=False)
+        )
+        report = run_score(nodes=(make_node(),), results=(not_run,), scoring=relaxed)
         assert report.proxies[0].status == "ranked"
 
     def test_country_filter(self) -> None:
