@@ -20,7 +20,7 @@ from nodebench.core.errors import (
 )
 from nodebench.core.orchestrator import resolve_run_exit, run_pipeline
 from nodebench.core.schema import RUN_ID_PATTERN, SCHEMA_VERSION
-from nodebench.core.serialization import public_dump, write_json_atomic
+from nodebench.core.serialization import dumps_json, public_dump, write_json_atomic
 from nodebench.core.stages import export_artifacts, score_artifacts, scored_path
 from nodebench.probes import (
     LEVEL_WARN,
@@ -28,6 +28,7 @@ from nodebench.probes import (
     check_cf_prereqs,
     check_proxy_prereqs,
 )
+from nodebench.scheduler import service as scheduler_service
 
 STUB_MESSAGE = "not implemented yet"
 DOCTOR_MESSAGE = "core ready, probes available"
@@ -409,8 +410,207 @@ def _cmd_export(args: argparse.Namespace) -> int:
     return 0
 
 
+SCHEDULER_ACTIONS = ("install", "status", "uninstall")
+YES_HINT = "pass --yes to create"
+UNINSTALL_YES_HINT = "pass --yes to uninstall"
+
+
+def _is_interactive() -> bool:
+    try:
+        return bool(
+            sys.stdin is not None
+            and sys.stdout is not None
+            and sys.stdin.isatty()
+            and sys.stdout.isatty()
+        )
+    except (AttributeError, ValueError, OSError):
+        return False
+
+
+def _scheduler_settings(args: argparse.Namespace) -> tuple[str, str, str]:
+    config = load_config(_project_root() / "config" / "default.yaml", None, env=os.environ)
+    output_dir = str(config.output_dir or "output")
+    default_time = str(getattr(config.scheduler, "default_time", "04:37"))
+    time_value = getattr(args, "time", None) or default_time
+    return str(time_value), output_dir, str(config.profile or "local")
+
+
+def _join_argv(argv: Sequence[str]) -> str:
+    parts: list[str] = []
+    for token in argv:
+        if " " in token and '"' not in token:
+            parts.append(f'"{token}"')
+        else:
+            parts.append(token)
+    return " ".join(parts)
+
+
+def _print_scheduler_plan(result: scheduler_service.SchedulerResult) -> None:
+    task = result.task or {}
+    print(f"plan {result.action} scheduled task:")
+    print(f"  name: {task.get('name') or result.name}")
+    print(f"  profile: {task.get('profile') or result.profile}")
+    print(f"  time: {task.get('time') or result.time}")
+    print(f"  platform: {task.get('platform') or result.platform}")
+    print(f"  command: {task.get('command', '')}")
+    print(f"  log: {task.get('log_path', '')}")
+    for command in result.commands:
+        print(f"  run: {_join_argv(command)}")
+
+
+def _print_text(text: str) -> None:
+    encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
+    try:
+        text.encode(encoding)
+    except (LookupError, UnicodeEncodeError):
+        text = text.encode(encoding, "replace").decode(encoding, "replace")
+    print(text)
+
+
+def _print_scheduler_json(result: scheduler_service.SchedulerResult) -> None:
+    _print_text(dumps_json(public_dump(result.model_dump())))
+
+
+def _print_scheduler_messages(result: scheduler_service.SchedulerResult) -> None:
+    for message in result.messages:
+        _print_text(message)
+
+
+def _confirm_or_hint(
+    prompt: str,
+    *,
+    assume_yes: bool,
+    json_mode: bool,
+) -> tuple[bool, bool]:
+    if assume_yes:
+        return True, False
+    if json_mode or not _is_interactive():
+        return False, False
+    answer = input(f"{prompt} [y/N] ").strip().lower()
+    if answer in {"y", "yes"}:
+        return True, False
+    return False, True
+
+
+def _scheduler_install(args: argparse.Namespace, json_mode: bool) -> int:
+    profile = str(getattr(args, "profile", None) or "")
+    if not profile:
+        raise ConfigError(
+            code="scheduler_profile_required",
+            message="install needs --profile <name>",
+        )
+    time_value, output_dir, _default_profile = _scheduler_settings(args)
+    options = {
+        "profile": profile,
+        "time_value": time_value,
+        "name": getattr(args, "name", None),
+        "output_dir": output_dir,
+    }
+    plan = scheduler_service.install(**options, dry_run=True)
+    if not json_mode:
+        _print_scheduler_plan(plan)
+    if getattr(args, "dry_run", False):
+        if json_mode:
+            _print_scheduler_json(plan)
+        else:
+            _print_scheduler_messages(plan)
+        return 0
+    confirmed, declined = _confirm_or_hint(
+        f"create scheduled task {plan.name}?",
+        assume_yes=bool(getattr(args, "yes", False)),
+        json_mode=json_mode,
+    )
+    if not confirmed:
+        plan.messages = ["declined: scheduled task not created" if declined else YES_HINT]
+        if json_mode:
+            _print_scheduler_json(plan)
+        else:
+            _print_scheduler_messages(plan)
+        return 0
+    result = scheduler_service.install(**options, dry_run=False)
+    if json_mode:
+        _print_scheduler_json(result)
+    else:
+        _print_scheduler_messages(result)
+    return 0
+
+
+def _scheduler_status(args: argparse.Namespace, json_mode: bool) -> int:
+    _time_value, output_dir, _default_profile = _scheduler_settings(args)
+    result = scheduler_service.status(
+        profile=getattr(args, "profile", None),
+        name=getattr(args, "name", None),
+        time_value=getattr(args, "time", None),
+        output_dir=output_dir,
+    )
+    if json_mode:
+        _print_scheduler_json(result)
+        return 0
+    for item in result.statuses:
+        print(
+            "task {0}: exists=yes next_run={1} last_run={2} last_result={3}".format(
+                item.get("name"),
+                item.get("next_run") or "-",
+                item.get("last_run") or "-",
+                item.get("last_result") or "-",
+            )
+        )
+    _print_scheduler_messages(result)
+    return 0
+
+
+def _scheduler_uninstall(args: argparse.Namespace, json_mode: bool) -> int:
+    time_value, output_dir, default_profile = _scheduler_settings(args)
+    options = {
+        "profile": getattr(args, "profile", None),
+        "name": getattr(args, "name", None),
+        "time_value": getattr(args, "time", None) or time_value,
+        "display_profile": getattr(args, "profile", None) or default_profile,
+        "output_dir": output_dir,
+    }
+    plan = scheduler_service.uninstall(**options, dry_run=True)
+    if not json_mode:
+        _print_scheduler_plan(plan)
+    if getattr(args, "dry_run", False):
+        if json_mode:
+            _print_scheduler_json(plan)
+        else:
+            _print_scheduler_messages(plan)
+        return 0
+    confirmed, declined = _confirm_or_hint(
+        f"remove scheduled task {plan.name}?",
+        assume_yes=bool(getattr(args, "yes", False)),
+        json_mode=json_mode,
+    )
+    if not confirmed:
+        plan.messages = ["declined: scheduled task kept" if declined else UNINSTALL_YES_HINT]
+        if json_mode:
+            _print_scheduler_json(plan)
+        else:
+            _print_scheduler_messages(plan)
+        return 0
+    result = scheduler_service.uninstall(**options, dry_run=False)
+    if json_mode:
+        _print_scheduler_json(result)
+    else:
+        _print_scheduler_messages(result)
+    return 0
+
+
 def _cmd_scheduler(args: argparse.Namespace) -> int:
-    return _stub(args)
+    action = getattr(args, "action", None)
+    if action not in SCHEDULER_ACTIONS:
+        print(
+            "error: scheduler needs an action: install, status or uninstall",
+            file=sys.stderr,
+        )
+        return 2
+    json_mode = bool(getattr(args, "json_output", False))
+    if action == "install":
+        return _scheduler_install(args, json_mode)
+    if action == "status":
+        return _scheduler_status(args, json_mode)
+    return _scheduler_uninstall(args, json_mode)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -513,6 +713,33 @@ def build_parser() -> argparse.ArgumentParser:
     )
     scheduler_parser.add_argument("--profile", default=None, help="profile name")
     scheduler_parser.add_argument("--time", default=None, help="local time HH:MM")
+    scheduler_parser.add_argument(
+        "--name",
+        default=None,
+        help="scheduled task name, always nodebench-*",
+    )
+    scheduler_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="print the plan without touching the system scheduler",
+    )
+    scheduler_parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="execute without an interactive confirmation",
+    )
+    scheduler_parser.add_argument(
+        "--json",
+        action="store_true",
+        dest="json_output",
+        help="print one machine readable json document",
+    )
+    scheduler_parser.add_argument(
+        "--debug",
+        action="store_true",
+        default=argparse.SUPPRESS,
+        help="print a traceback for unexpected errors",
+    )
     scheduler_parser.set_defaults(func=_cmd_scheduler)
     return parser
 

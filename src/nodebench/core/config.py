@@ -285,6 +285,23 @@ class PublishConfig(BaseModel):
     allow_proxy_credentials: bool = False
 
 
+class SchedulerConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = True
+    default_time: str = "04:37"
+
+    @field_validator("default_time")
+    @classmethod
+    def _valid_default_time(cls, value: str) -> str:
+        text = str(value).strip()
+        if not re.fullmatch(r"([01][0-9]|2[0-3]):[0-5][0-9]", text):
+            raise ValueError(
+                "default_time must look like HH:MM between 00:00 and 23:59"
+            )
+        return text
+
+
 class AppConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -296,6 +313,7 @@ class AppConfig(BaseModel):
     history: HistoryConfig = Field(default_factory=HistoryConfig)
     scoring: ScoringConfig = Field(default_factory=ScoringConfig)
     publish: PublishConfig = Field(default_factory=PublishConfig)
+    scheduler: SchedulerConfig = Field(default_factory=SchedulerConfig)
     budget: dict[str, float] = Field(default_factory=dict)
     output_dir: str = "output"
     secrets: dict[str, str] = Field(default_factory=dict, repr=False)
@@ -523,5 +541,6 @@ __all__ = [
     "ScoringCfWeights",
     "ScoringConfig",
     "PublishConfig",
+    "SchedulerConfig",
     "load_config",
 ]

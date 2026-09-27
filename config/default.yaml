@@ -71,5 +71,8 @@ scoring:
 publish:
   enabled: false
   allow_proxy_credentials: false
+scheduler:
+  enabled: true
+  default_time: "04:37"
 budget: {}
 output_dir: output
