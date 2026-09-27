@@ -246,11 +246,36 @@ class ScoringFilters(BaseModel):
         return cleaned
 
 
+class ScoringCfWeights(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    compatibility: float = 0.35
+    latency: float = 0.25
+    speed: float = 0.25
+    loss: float = 0.15
+
+    @field_validator("compatibility", "latency", "speed", "loss")
+    @classmethod
+    def _non_negative_weight(cls, value: float) -> float:
+        number = float(value)
+        if number < 0:
+            raise ValueError("weights must not be negative")
+        return number
+
+    @model_validator(mode="after")
+    def _weight_sum_positive(self) -> "ScoringCfWeights":
+        total = self.compatibility + self.latency + self.speed + self.loss
+        if total <= 0:
+            raise ValueError("at least one cf scoring weight must be positive")
+        return self
+
+
 class ScoringConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     weights: ScoringWeights = Field(default_factory=ScoringWeights)
     filters: ScoringFilters = Field(default_factory=ScoringFilters)
+    cf_weights: ScoringCfWeights = Field(default_factory=ScoringCfWeights)
 
 
 class PublishConfig(BaseModel):
@@ -495,6 +520,7 @@ __all__ = [
     "HistoryConfig",
     "ScoringWeights",
     "ScoringFilters",
+    "ScoringCfWeights",
     "ScoringConfig",
     "PublishConfig",
     "load_config",
