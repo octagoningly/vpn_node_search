@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import re
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Literal, Mapping
 
 import yaml
 from pydantic import (
@@ -12,6 +12,7 @@ from pydantic import (
     Field,
     ValidationError,
     field_validator,
+    model_validator,
 )
 
 from nodebench.core.errors import ConfigError
@@ -158,6 +159,100 @@ class HistoryConfig(BaseModel):
     days: int = 14
 
 
+class ScoringWeights(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    latency: float = 0.25
+    speed: float = 0.25
+    purity: float = 0.25
+    stability: float = 0.15
+    loss: float = 0.10
+
+    @field_validator("latency", "speed", "purity", "stability", "loss")
+    @classmethod
+    def _non_negative_weight(cls, value: float) -> float:
+        number = float(value)
+        if number < 0:
+            raise ValueError("weights must not be negative")
+        return number
+
+    @model_validator(mode="after")
+    def _weight_sum_positive(self) -> "ScoringWeights":
+        total = (
+            self.latency
+            + self.speed
+            + self.purity
+            + self.stability
+            + self.loss
+        )
+        if total <= 0:
+            raise ValueError("at least one scoring weight must be positive")
+        return self
+
+
+class ScoringFilters(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    require_real_probe_success: bool = True
+    max_latency_ms: float = 800.0
+    min_speed_mb_s: float = 0.5
+    max_risk: float = 50.0
+    allowed_countries: list[str] = Field(default_factory=list)
+    missing: Literal["pending", "exclude"] = "pending"
+    stability_min_samples: int = 3
+
+    @field_validator("max_latency_ms")
+    @classmethod
+    def _positive_latency(cls, value: float) -> float:
+        number = float(value)
+        if number <= 0:
+            raise ValueError("max_latency_ms must be greater than zero")
+        return number
+
+    @field_validator("min_speed_mb_s")
+    @classmethod
+    def _non_negative_speed(cls, value: float) -> float:
+        number = float(value)
+        if number < 0:
+            raise ValueError("min_speed_mb_s must not be negative")
+        return number
+
+    @field_validator("max_risk")
+    @classmethod
+    def _valid_risk(cls, value: float) -> float:
+        number = float(value)
+        if not 0 <= number <= 100:
+            raise ValueError("max_risk must be between 0 and 100")
+        return number
+
+    @field_validator("stability_min_samples")
+    @classmethod
+    def _counter_non_negative(cls, value: int) -> int:
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise ValueError("stability_min_samples must not be negative")
+        return value
+
+    @field_validator("allowed_countries")
+    @classmethod
+    def _valid_countries(cls, value: list[str]) -> list[str]:
+        cleaned: list[str] = []
+        for item in value:
+            code = str(item).strip().upper()
+            if len(code) != 2 or not code.isalpha():
+                raise ValueError(
+                    "allowed_countries entries must be ISO 3166-1 alpha-2 codes"
+                )
+            cleaned.append(code)
+        return cleaned
+
+
+class ScoringConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    weights: ScoringWeights = Field(default_factory=ScoringWeights)
+    filters: ScoringFilters = Field(default_factory=ScoringFilters)
+
+
 class PublishConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -174,6 +269,7 @@ class AppConfig(BaseModel):
     probe: ProbeConfig = Field(default_factory=ProbeConfig)
     intelligence: IntelligenceConfig = Field(default_factory=IntelligenceConfig)
     history: HistoryConfig = Field(default_factory=HistoryConfig)
+    scoring: ScoringConfig = Field(default_factory=ScoringConfig)
     publish: PublishConfig = Field(default_factory=PublishConfig)
     budget: dict[str, float] = Field(default_factory=dict)
     output_dir: str = "output"
@@ -397,6 +493,9 @@ __all__ = [
     "ProbeConfig",
     "IntelligenceConfig",
     "HistoryConfig",
+    "ScoringWeights",
+    "ScoringFilters",
+    "ScoringConfig",
     "PublishConfig",
     "load_config",
 ]

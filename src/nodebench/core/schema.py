@@ -337,6 +337,268 @@ class EndpointProbeResult(ProbeResultBase):
         return self
 
 
+SCORE_STATUSES = ("ranked", "filtered", "pending")
+
+
+class HistorySummary(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    item_id: str
+    window_days: int
+    scheduled: int = 0
+    executed: int = 0
+    succeeded: int = 0
+    sample_count: int = 0
+    availability_rate: float | None = None
+    first_observed_at: datetime | None = None
+    last_observed_at: datetime | None = None
+    min_samples: int = 0
+
+    @field_validator(
+        "window_days",
+        "scheduled",
+        "executed",
+        "succeeded",
+        "sample_count",
+        "min_samples",
+    )
+    @classmethod
+    def _counter_non_negative(cls, value: int) -> int:
+        return _check_counter("counter", value)
+
+    @model_validator(mode="after")
+    def _history_invariants(self) -> "HistorySummary":
+        if self.window_days < 1:
+            raise ValueError("window_days must be at least 1")
+        if self.executed > self.scheduled:
+            raise ValueError("executed must not exceed scheduled")
+        if self.succeeded > self.executed:
+            raise ValueError("succeeded must not exceed executed")
+        if self.sample_count > self.succeeded:
+            raise ValueError("sample_count must not exceed succeeded")
+        if (
+            self.availability_rate is not None
+            and not 0.0 <= self.availability_rate <= 1.0
+        ):
+            raise ValueError("availability_rate must be between 0 and 1")
+        return self
+
+
+class PersistSummary(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["ok", "failed", "skipped"]
+    reason: str = ""
+    database: str = ""
+    runs: int = 0
+    sources: int = 0
+    items: int = 0
+    observations: int = 0
+    pruned: int = 0
+    private_items: str = ""
+    error: str = ""
+
+    @field_validator("runs", "sources", "items", "observations", "pruned")
+    @classmethod
+    def _counter_non_negative(cls, value: int) -> int:
+        return _check_counter("counter", value)
+
+
+class ScoreIssue(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    item_id: str
+    kind: Literal["proxy_node", "edge_endpoint"]
+    code: str
+    message_redacted: str = ""
+
+
+class RankedProxy(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    item_id: str
+    kind: Literal["proxy_node"] = "proxy_node"
+    status: Literal["ranked", "filtered", "pending"]
+    rank: int = 0
+    score: float = 0.0
+    score_breakdown: dict[str, float] = Field(default_factory=dict)
+    pending: list[str] = Field(default_factory=list)
+    filters_failed: list[str] = Field(default_factory=list)
+    notes: dict[str, Any] = Field(default_factory=dict)
+    scoring_version: str
+    rule_snapshot: dict[str, Any] = Field(default_factory=dict)
+    runner_id: str
+    probe_status: str
+    probe_mode: str = ProbeMode.SIMULATED.value
+    observed_at: datetime | None = None
+    sample_count: int = 0
+    availability_rate: float | None = None
+    latency_ms: float | None = None
+    speed_mb_s: float | None = None
+    speed_unit: str = "MB/s"
+    loss_pct: float | None = None
+    risk: float | None = None
+    country_code: str | None = None
+    protocol: str = ""
+    source_ids: list[str] = Field(default_factory=list)
+    remarks: str = ""
+
+    @field_validator("sample_count")
+    @classmethod
+    def _counter_non_negative(cls, value: int) -> int:
+        return _check_counter("counter", value)
+
+    @model_validator(mode="after")
+    def _ranked_invariants(self) -> "RankedProxy":
+        if not 0.0 <= self.score <= 1.0:
+            raise ValueError("score must be between 0 and 1")
+        if self.rank < 0:
+            raise ValueError("rank must not be negative")
+        if self.status == "ranked" and self.rank < 1:
+            raise ValueError("ranked items require rank >= 1")
+        if self.status != "ranked" and self.rank != 0:
+            raise ValueError("non-ranked items must have rank 0")
+        return self
+
+
+class RankedEndpoint(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    item_id: str
+    kind: Literal["edge_endpoint"] = "edge_endpoint"
+    status: Literal["ranked", "filtered", "pending"]
+    rank: int = 0
+    score: float = 0.0
+    score_breakdown: dict[str, float] = Field(default_factory=dict)
+    pending: list[str] = Field(default_factory=list)
+    filters_failed: list[str] = Field(default_factory=list)
+    notes: dict[str, Any] = Field(default_factory=dict)
+    scoring_version: str
+    rule_snapshot: dict[str, Any] = Field(default_factory=dict)
+    runner_id: str
+    probe_status: str
+    probe_mode: str = ProbeMode.SIMULATED.value
+    observed_at: datetime | None = None
+    sample_count: int = 0
+    availability_rate: float | None = None
+    latency_ms: float | None = None
+    speed_mb_s: float | None = None
+    speed_unit: str = "MB/s"
+    loss_pct: float | None = None
+    risk: float | None = None
+    country_code: str | None = None
+    address: str
+    port: int
+    target_host: str = ""
+    tls: bool = False
+    host_compatible: bool | None = None
+    source_ids: list[str] = Field(default_factory=list)
+    remarks: str = ""
+
+    @field_validator("sample_count")
+    @classmethod
+    def _counter_non_negative(cls, value: int) -> int:
+        return _check_counter("counter", value)
+
+    @model_validator(mode="after")
+    def _ranked_invariants(self) -> "RankedEndpoint":
+        _check_port(self.port)
+        if not self.address.strip():
+            raise ValueError("address must not be empty")
+        if not 0.0 <= self.score <= 1.0:
+            raise ValueError("score must be between 0 and 1")
+        if self.rank < 0:
+            raise ValueError("rank must not be negative")
+        if self.status == "ranked" and self.rank < 1:
+            raise ValueError("ranked items require rank >= 1")
+        if self.status != "ranked" and self.rank != 0:
+            raise ValueError("non-ranked items must have rank 0")
+        return self
+
+
+class ScoreReport(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: int = SCHEMA_VERSION
+    run_id: str = Field(pattern=RUN_ID_PATTERN)
+    runner_id: str
+    profile: str
+    generated_at: datetime = Field(default_factory=_utc_now)
+    scoring_version: str
+    rule_snapshot: dict[str, Any] = Field(default_factory=dict)
+    proxies: list[RankedProxy] = Field(default_factory=list)
+    endpoints: list[RankedEndpoint] = Field(default_factory=list)
+    issues: list[ScoreIssue] = Field(default_factory=list)
+    counts: dict[str, int] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _counts_non_negative(self) -> "ScoreReport":
+        for name, value in self.counts.items():
+            _check_counter(name, value)
+        return self
+
+
+class ValidationReport(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ok: bool
+    errors: list[str] = Field(default_factory=list)
+    files_checked: list[str] = Field(default_factory=list)
+
+
+class ExportedFile(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    sha256: str
+    size_bytes: int
+    entry_count: int = 0
+
+    @field_validator("size_bytes", "entry_count")
+    @classmethod
+    def _counter_non_negative(cls, value: int) -> int:
+        return _check_counter("counter", value)
+
+    @field_validator("sha256")
+    @classmethod
+    def _sha256_hex(cls, value: str) -> str:
+        text = value.strip().lower()
+        if len(text) != 64 or any(ch not in "0123456789abcdef" for ch in text):
+            raise ValueError("sha256 must be a lowercase 64-char hex digest")
+        return text
+
+
+class ExportOutcome(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["ok", "failed"]
+    directory: str = ""
+    files: list[ExportedFile] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
+    validation: ValidationReport | None = None
+    publishable: bool = False
+    counts: dict[str, int] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _counts_non_negative(self) -> "ExportOutcome":
+        for name, value in self.counts.items():
+            _check_counter(name, value)
+        return self
+
+
+class PublishResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["ok", "skipped", "blocked", "failed"]
+    reason: str = ""
+    path: str = ""
+    files: list[str] = Field(default_factory=list)
+    blocked: list[str] = Field(default_factory=list)
+    excluded: list[str] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
+    replaced_previous: bool = False
+
+
 def assert_probe_real(result: Any) -> None:
     """Reject results that were produced by a stand-in backend."""
     from nodebench.core.errors import ProbeError
@@ -380,4 +642,15 @@ __all__ = [
     "ProxyProbeResult",
     "EndpointProbeResult",
     "assert_probe_real",
+    "SCORE_STATUSES",
+    "HistorySummary",
+    "PersistSummary",
+    "ScoreIssue",
+    "RankedProxy",
+    "RankedEndpoint",
+    "ScoreReport",
+    "ValidationReport",
+    "ExportedFile",
+    "ExportOutcome",
+    "PublishResult",
 ]

@@ -48,6 +48,21 @@ intelligence:
   reputation_enabled: false
 history:
   days: 14
+scoring:
+  weights:
+    latency: 0.25
+    speed: 0.25
+    purity: 0.25
+    stability: 0.15
+    loss: 0.10
+  filters:
+    require_real_probe_success: true
+    max_latency_ms: 800.0
+    min_speed_mb_s: 0.5
+    max_risk: 50.0
+    allowed_countries: []
+    missing: pending
+    stability_min_samples: 3
 publish:
   enabled: false
   allow_proxy_credentials: false
