@@ -384,6 +384,21 @@ class HistorySummary(BaseModel):
         return self
 
 
+class SourceQuality(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source_id: str
+    runs_seen: int = 0
+    ok_runs: int = 0
+    fetched_total: int = 0
+    error_total: int = 0
+
+    @field_validator("runs_seen", "ok_runs", "fetched_total", "error_total")
+    @classmethod
+    def _counter_non_negative(cls, value: int) -> int:
+        return _check_counter("counter", value)
+
+
 class PersistSummary(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -395,7 +410,7 @@ class PersistSummary(BaseModel):
     items: int = 0
     observations: int = 0
     pruned: int = 0
-    private_items: str = ""
+    source_quality: list[SourceQuality] = Field(default_factory=list)
     error: str = ""
 
     @field_validator("runs", "sources", "items", "observations", "pruned")
@@ -644,6 +659,7 @@ __all__ = [
     "assert_probe_real",
     "SCORE_STATUSES",
     "HistorySummary",
+    "SourceQuality",
     "PersistSummary",
     "ScoreIssue",
     "RankedProxy",
