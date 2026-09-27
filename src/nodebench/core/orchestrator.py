@@ -9,12 +9,14 @@ from nodebench.core.config import AppConfig
 from nodebench.core.context import get_logger, redact
 from nodebench.core.errors import (
     EXIT_CONFIG,
+    EXIT_EXPORT_OR_PUBLISH,
     EXIT_OK,
     EXIT_PROBE_OR_STORAGE,
     EXIT_SOURCES,
 )
 from nodebench.core.schema import SCHEMA_VERSION, ParseIssue, ProbeMode, ProbeStatus
 from nodebench.core.serialization import public_dump
+from nodebench.core.stages import register_node_secrets, run_post_stages
 from nodebench.normalize import dedupe, normalize_all
 from nodebench.parsers import parse_raw_item
 from nodebench.probes import (
@@ -365,6 +367,20 @@ def _status_with_probe(
     return status
 
 
+def _stage_exit(stages: Mapping[str, Any] | None) -> int:
+    nodes: Mapping[str, Any] = stages or {}
+    for name in ("inspect", "persist", "score"):
+        status = str((nodes.get(name) or {}).get("status") or "")
+        if status == "failed":
+            return EXIT_PROBE_OR_STORAGE
+    if str((nodes.get("export") or {}).get("status") or "") == "failed":
+        return EXIT_EXPORT_OR_PUBLISH
+    status = str((nodes.get("publish") or {}).get("status") or "")
+    if status in ("failed", "blocked"):
+        return EXIT_EXPORT_OR_PUBLISH
+    return EXIT_OK
+
+
 def resolve_run_exit(
     *,
     run_status: str = "ok",
@@ -373,6 +389,7 @@ def resolve_run_exit(
     cf_enabled: bool = False,
     target_host: str = "",
     strict: bool = False,
+    stages: Mapping[str, Any] | None = None,
 ) -> int:
     if cf_enabled and not str(target_host or "").strip():
         return EXIT_CONFIG
@@ -399,7 +416,7 @@ def resolve_run_exit(
             reason = str(node.get("skipped_reason") or "")
             if node.get("mode") == "skip" and reason not in STRICT_EXEMPT_REASONS:
                 return EXIT_PROBE_OR_STORAGE
-    return EXIT_OK
+    return _stage_exit(stages)
 
 
 def run_pipeline(
@@ -409,6 +426,8 @@ def run_pipeline(
     dry_run: bool = False,
     run_probes: bool = True,
     probe_sink: list | None = None,
+    post_stages: bool = False,
+    allow_publish: bool = True,
 ) -> dict:
     """Collect, parse, normalize, dedupe and probe sources into a run summary."""
     logger = get_logger(ctx.run_id)
@@ -419,6 +438,8 @@ def run_pipeline(
         proxies, endpoints, parse_issues
     )
     final_proxies, final_edges = dedupe(nodes, edges)
+    if post_stages:
+        register_node_secrets(final_proxies)
     counts = {
         "sources_total": len(reports),
         "sources_failed": sum(1 for report in reports if not report.ok),
@@ -469,6 +490,8 @@ def run_pipeline(
         "generated_at": generated_at,
         "dry_run": bool(dry_run),
         "stages_pending": list(PENDING_STAGES),
+        "stages": {},
+        "licenses": [],
         "status": status,
         "diagnostics": _diagnostics(reports, collected_issues),
         "counts": counts,
@@ -516,7 +539,21 @@ def run_pipeline(
             cf_node["skipped"],
         )
     )
-    return public_dump(result)
+    result = public_dump(result)
+    if post_stages and status != "failed":
+        result = public_dump(
+            run_post_stages(
+                result,
+                config=config,
+                source_reports=reports,
+                nodes=final_proxies,
+                edges=final_edges,
+                probe_results=probe_results,
+                items=outcome.items,
+                allow_publish=allow_publish,
+            )
+        )
+    return result
 
 
 __all__ = [

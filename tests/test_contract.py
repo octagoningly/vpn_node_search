@@ -26,6 +26,8 @@ TOP_LEVEL_KEYS = {
     "generated_at",
     "dry_run",
     "stages_pending",
+    "stages",
+    "licenses",
     "status",
     "diagnostics",
     "counts",

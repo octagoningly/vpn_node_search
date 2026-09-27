@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import shutil
 import sys
 import traceback
@@ -11,10 +12,16 @@ from typing import Any
 
 from nodebench.core.config import AppConfig, load_config
 from nodebench.core.context import build_run_context, redact
-from nodebench.core.errors import NodeBenchError, exit_code_for
+from nodebench.core.errors import (
+    ConfigError,
+    ExportError,
+    NodeBenchError,
+    exit_code_for,
+)
 from nodebench.core.orchestrator import resolve_run_exit, run_pipeline
-from nodebench.core.schema import SCHEMA_VERSION
+from nodebench.core.schema import RUN_ID_PATTERN, SCHEMA_VERSION
 from nodebench.core.serialization import public_dump, write_json_atomic
+from nodebench.core.stages import export_artifacts, score_artifacts, scored_path
 from nodebench.probes import (
     LEVEL_WARN,
     as_check,
@@ -48,7 +55,9 @@ def _project_root() -> Path:
 
 
 def _load(
-    args: argparse.Namespace, env: Mapping[str, str] | None = None
+    args: argparse.Namespace,
+    env: Mapping[str, str] | None = None,
+    use_input: bool = True,
 ) -> AppConfig:
     root = _project_root()
     profile = getattr(args, "profile", None)
@@ -56,7 +65,7 @@ def _load(
         root / "config" / "profiles" / f"{profile}.yaml" if profile else None
     )
     overrides: dict[str, Any] = {}
-    input_path = getattr(args, "input", None)
+    input_path = getattr(args, "input", None) if use_input else None
     if input_path:
         overrides["sources.local.enabled"] = True
         overrides["sources.local.paths"] = [str(input_path)]
@@ -114,10 +123,18 @@ def _cmd_run(args: argparse.Namespace) -> int:
     config = _load(args)
     ctx = build_run_context(config, args)
     results: list = []
-    result = run_pipeline(config, ctx, dry_run=bool(args.dry_run), probe_sink=results)
-    path = _report_path(config, args.output_dir, ctx.run_id, bool(args.dry_run))
+    dry_run = bool(args.dry_run)
+    result = run_pipeline(
+        config,
+        ctx,
+        dry_run=dry_run,
+        probe_sink=results,
+        post_stages=not dry_run,
+        allow_publish=not bool(getattr(args, "no_publish", False)),
+    )
+    path = _report_path(config, args.output_dir, ctx.run_id, dry_run)
     write_json_atomic(path, result)
-    if results and not args.dry_run:
+    if results and not dry_run:
         probe_path = _write_probe_results(
             _probe_results_path(config, args.output_dir, ctx.run_id),
             ctx.run_id,
@@ -133,6 +150,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
         cf_enabled=bool(config.probe.cf.enabled),
         target_host=str(config.probe.cf.target_host or ""),
         strict=bool(getattr(args, "strict", False)),
+        stages=result.get("stages"),
     )
 
 
@@ -338,12 +356,57 @@ def _cmd_inspect(args: argparse.Namespace) -> int:
     return _stub(args)
 
 
+def _require_run_id(args: argparse.Namespace) -> str:
+    run_id = str(getattr(args, "run_id", None) or "")
+    if not re.fullmatch(RUN_ID_PATTERN, run_id):
+        raise ConfigError(
+            code="run_id_required",
+            message=(
+                "--run-id is required and must look like "
+                "20250101T120000Z-abcdef"
+            ),
+        )
+    return run_id
+
+
 def _cmd_score(args: argparse.Namespace) -> int:
-    return _stub(args)
+    config = _load(args, use_input=False)
+    run_id = _require_run_id(args)
+    score_report = score_artifacts(config, run_id)
+    counts = score_report.counts
+    print(
+        "[{0}] score ranked={1} filtered={2} pending={3} issues={4} report={5}".format(
+            run_id,
+            counts.get("ranked"),
+            counts.get("filtered"),
+            counts.get("pending"),
+            len(score_report.issues),
+            scored_path(config, run_id),
+        )
+    )
+    return 0
 
 
 def _cmd_export(args: argparse.Namespace) -> int:
-    return _stub(args)
+    config = _load(args, use_input=False)
+    run_id = _require_run_id(args)
+    outcome = export_artifacts(config, run_id)
+    print(
+        "[{0}] export status={1} files={2} proxies={3} endpoints={4} dir={5}".format(
+            run_id,
+            outcome.status,
+            len(outcome.files),
+            outcome.counts.get("proxies"),
+            outcome.counts.get("endpoints"),
+            outcome.directory,
+        )
+    )
+    if outcome.status != "ok":
+        raise ExportError(
+            code=outcome.errors[0] if outcome.errors else "export_failed",
+            message="export stage failed",
+        )
+    return 0
 
 
 def _cmd_scheduler(args: argparse.Namespace) -> int:
@@ -381,6 +444,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--strict",
         action="store_true",
         help="fail when probing is enabled but produces no real measurements",
+    )
+    run_parser.add_argument(
+        "--no-publish",
+        action="store_true",
+        help="skip publishing output/latest after the export stage",
     )
     run_parser.add_argument(
         "--debug",
@@ -424,6 +492,12 @@ def build_parser() -> argparse.ArgumentParser:
                 "--output-dir",
                 default=None,
                 help="directory that receives probe reports",
+            )
+        if name in ("score", "export"):
+            stage_parser.add_argument(
+                "--output-dir",
+                default=None,
+                help="directory that holds run artifacts",
             )
         stage_parser.set_defaults(func=handler)
 

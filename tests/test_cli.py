@@ -236,11 +236,10 @@ def test_project_samples_stay_reachable():
 
 
 def test_stub_stage_is_not_implemented(capsys):
-    for name in ("inspect", "score", "export"):
-        code = main([name])
-        out = capsys.readouterr()
-        assert code == 0
-        assert STUB_MESSAGE in out.out
+    code = main(["inspect"])
+    out = capsys.readouterr()
+    assert code == 0
+    assert STUB_MESSAGE in out.out
 
 
 def test_unknown_command_returns_two(capsys):
