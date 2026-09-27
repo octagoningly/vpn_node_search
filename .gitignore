@@ -1,5 +1,6 @@
 参考/
 output/
+tools/
 *.db
 *.sqlite
 *.sqlite3
