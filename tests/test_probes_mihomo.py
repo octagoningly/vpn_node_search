@@ -203,6 +203,9 @@ def test_build_mihomo_config_shape():
     assert config["bind-address"] == "127.0.0.1"
     assert config["allow-lan"] is False
     assert [proxy["name"] for proxy in config["proxies"]] == ["node"]
+    groups = config["proxy-groups"]
+    assert groups[0]["name"] == "GLOBAL"
+    assert groups[0]["proxies"] == ["node"]
 
 
 def test_skip_result_is_not_run_mode_with_reason(tmp_path: Path):

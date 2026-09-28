@@ -141,6 +141,11 @@ def build_mihomo_config(target: ProxyTarget, *, mixed_port: int, api_port: int) 
         "external-controller": f"127.0.0.1:{int(api_port)}",
         "secret": "",
         "proxies": [to_mihomo_proxy(target)],
+        # global mode routes through the GLOBAL group; without it mihomo
+        # falls back to DIRECT and fake nodes would look usable.
+        "proxy-groups": [
+            {"name": "GLOBAL", "type": "select", "proxies": [PROXY_NAME]}
+        ],
     }
 
 
@@ -360,6 +365,8 @@ class MihomoProber:
                     [self.binary, "-v"],
                     capture_output=True,
                     text=True,
+                    encoding="utf-8",
+                    errors="replace",
                     timeout=5,
                 )
                 line = (completed.stdout or completed.stderr or "").strip().splitlines()

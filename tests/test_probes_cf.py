@@ -28,6 +28,7 @@ from nodebench.probes.cfst import (
     CHECK_OK,
     CHECK_TIMEOUT,
     EndpointCheck,
+    default_cfst_runner,
     family_mismatch,
     normalize_ip,
 )
@@ -198,6 +199,61 @@ def test_probe_merges_metrics_from_csv(tmp_path: Path):
     assert result.recv_bytes == 4
     assert result.csv_row["ip"] == "192.0.2.1"
     assert "metrics_missing" not in result.notes
+
+
+def test_empty_cfst_table_yields_missing_metrics(tmp_path: Path):
+    def empty_runner(command, timeout) -> str:
+        return ""
+
+    prober = make_prober(
+        tmp_path, binary="fake-cfst", check=passing_check, runner=empty_runner
+    )
+    prober.collect_metrics([sample_target()])
+    result = prober.probe(sample_target())
+    assert result.status is ProbeStatus.OK
+    assert result.latency_ms is None
+    assert result.notes.get("metrics_missing") is True
+    assert "metrics_error" not in result.notes
+
+
+def test_default_cfst_runner_skips_banner_when_no_csv(tmp_path: Path):
+    command = ["cfst", "-o", str(tmp_path / "missing.csv"), "-p", "0"]
+
+    class FakeCompleted:
+        returncode = 0
+        stdout = "banner\nno results\n"
+        stderr = ""
+
+    monkey = pytest.MonkeyPatch()
+    try:
+        monkey.setattr(
+            "nodebench.probes.cfst.subprocess.run",
+            lambda *args, **kwargs: FakeCompleted(),
+        )
+        assert default_cfst_runner(command, 5.0) == ""
+    finally:
+        monkey.undo()
+
+
+def test_default_cfst_runner_reads_csv_file(tmp_path: Path):
+    csv_path = tmp_path / "result.csv"
+    csv_path.write_text(CSV_TEXT, encoding="utf-8")
+    command = ["cfst", "-o", str(csv_path), "-p", "0"]
+
+    class FakeCompleted:
+        returncode = 0
+        stdout = "banner\n"
+        stderr = ""
+
+    monkey = pytest.MonkeyPatch()
+    try:
+        monkey.setattr(
+            "nodebench.probes.cfst.subprocess.run",
+            lambda *args, **kwargs: FakeCompleted(),
+        )
+        assert default_cfst_runner(command, 5.0) == CSV_TEXT
+    finally:
+        monkey.undo()
 
 
 def test_metrics_failure_downgrades_ok(tmp_path: Path):

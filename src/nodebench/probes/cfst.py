@@ -453,6 +453,8 @@ def default_cfst_runner(command: Sequence[str], timeout: float) -> str:
             list(command),
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             stdin=subprocess.DEVNULL,
             timeout=max(1.0, float(timeout)),
         )
@@ -466,10 +468,6 @@ def default_cfst_runner(command: Sequence[str], timeout: float) -> str:
             message=f"unable to start cfst: {err}",
             retryable=False,
         ) from err
-    if csv_path:
-        path = Path(csv_path)
-        if path.is_file():
-            return path.read_text(encoding="utf-8", errors="replace")
     stdout = completed.stdout or ""
     if completed.returncode:
         detail = (completed.stderr or stdout or "").strip()[:400]
@@ -478,6 +476,13 @@ def default_cfst_runner(command: Sequence[str], timeout: float) -> str:
             message=f"cfst exited with code {completed.returncode}: {detail}",
             retryable=True,
         )
+    if csv_path:
+        path = Path(csv_path)
+        if path.is_file():
+            return path.read_text(encoding="utf-8", errors="replace")
+        # CFST skips writing the result file when no IP passed the filters;
+        # banner text on stdout is not a CSV table.
+        return ""
     return stdout
 
 
@@ -549,6 +554,8 @@ class CfstProber:
                     [self.binary, "-h"],
                     capture_output=True,
                     text=True,
+                    encoding="utf-8",
+                    errors="replace",
                     stdin=subprocess.DEVNULL,
                     timeout=5,
                 )
@@ -655,6 +662,8 @@ class CfstProber:
             str(download_nodes),
             "-n",
             str(threads),
+            "-p",
+            "0",
         ]
         if self.speedtest_url:
             command += ["-url", self.speedtest_url]
@@ -662,6 +671,8 @@ class CfstProber:
             command += ["-dd"]
         timeout = max(1.0, self.budget.remaining_time)
         text = self.runner(command, timeout)
+        if not str(text or "").strip():
+            return []
         return list(parse_cfst_csv(text).values())
 
     def _result(
