@@ -19,7 +19,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up UV
-        uses:astral/setup-uv@v3
+        uses: astral/setup-uv@v3
         with:
           # Pin to the same Python version as the project
           python-version: "3.12"

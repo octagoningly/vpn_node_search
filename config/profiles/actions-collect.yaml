@@ -1,19 +1,13 @@
-# Actions 侧：GitHub 代码搜索发现候选 + 可选粗测
-# 说明：Actions 测速是 GitHub 机房网络，不是用户本地；本 profile 默认只收集+评分，probe 可关。
+# Actions 候选拉取：GitHub 代码搜索发现 CF 优选/ADDAPI 候选，默认只 collect+score 粗筛。
+# 注意：Actions 测速反映的是 GitHub 机房网络，不是用户本地网络，因此 probe 默认关闭；
+#       真实测速请在本机跑（见 .github/workflows/README.md「Actions 发现候选 vs 本机测速」）。
 profile: actions-collect
-runner_id: github:actions
+runner_id: actions:collect
 sources:
   local:
     enabled: false
   subscriptions:
-    enabled: true
-    urls:
-      - https://raw.githubusercontent.com/cmliu/WorkerVless2sub/main/addressesapi.txt
-      - https://raw.githubusercontent.com/cmliu/WorkerVless2sub/main/addressescsv.csv
-      - https://raw.githubusercontent.com/cmliu/WorkerVless2sub/main/addressesipv6api.txt
-    timeout_s: 20
-    license_tag: "MIT"
-    offline: false
+    enabled: false
   github:
     enabled: true
     allowed_repositories:
@@ -24,29 +18,33 @@ sources:
     queries:
       - 'filename:addressesapi.txt'
       - 'filename:addressescsv.csv'
+      - 'filename:addressesipv6api.txt'
       - 'filename:cf-addapi.txt'
       - '"IP地址" filename:addressescsv.csv'
-      - 'filename:ip.txt CloudflareSpeedTest'
-    max_files_per_run: 30
-    cache_ttl_hours: 12
+      - 'Cloudflare 优选 filename:addressesapi.txt'
+    max_files_per_run: 20
+    cache_ttl_hours: 24
     offline: false
   cf:
+    # 可指向 import 的候选清单，或清空 candidate_files（空列表会报 no_files）。
     enabled: true
-    candidate_files: []
-    max_ips_per_run: 200
+    candidate_files:
+      - candidates/cf-user-20260928.txt
+    max_ips_per_run: 150
   candidate_import:
     enabled: false
 probe:
+  # Actions 网络≠用户网络：默认只 collect+score 粗筛，proxy/CF 测速都关。
   proxy:
     enabled: false
   cf:
-    enabled: true
+    enabled: false
     cfst_path: tools/cfst/CloudflareSpeedTest.exe
     target_host: octagoningly-vpn.pages.dev
-    speedtest_url: https://speed.cloudflare.com/__down?bytes=5000000
-    max_nodes: 200
-    max_download_nodes: 30
-    total_deadline_s: 240
+    speedtest_url: ""
+    max_nodes: 400
+    max_download_nodes: 50
+    total_deadline_s: 300
     allowed_ports:
       - 443
       - 8443
@@ -64,4 +62,4 @@ probe:
 publish:
   enabled: false
   allow_proxy_credentials: false
-  cf_candidates_authorized: true
+  cf_candidates_authorized: false

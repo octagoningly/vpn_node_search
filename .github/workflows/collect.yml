@@ -1,16 +1,34 @@
-# NodeBench Collect — GitHub code-search discovers CF/node candidates on Actions
+# NodeBench Collect — GitHub code search to widen the IP candidate pool
 #
-# 分工（务必理解）：
-#   - Actions 跑 = GitHub 机房网络，**不是**用户本地体验
-#   - 本 workflow 只做「发现候选 + 可选粗测」，产出脱敏候选清单 artifact
-#   - 本地再用 `nodebench run --profile auto-collect` 做最终测速与发布
+# ── Purpose ─────────────────────────────────────────────────────────────────
+# Runs the `actions-collect` profile: GitHub code search discovers CF 优选 /
+# ADDAPI candidate files, plus optional imported CF candidates. Probes stay
+# OFF — Actions measurements reflect GitHub's network, not the operator's
+# (see README.md「Actions 发现候选 vs 本机测速」).
 #
-# 触发：
-#   - workflow_dispatch（手动，可传 queries）
-#   - schedule（每天一次，UTC 17:10 ≈ 北京 01:10）
+# ── How to trigger ──────────────────────────────────────────────────────────
+# Manual:  Actions → "NodeBench Collect" → Run workflow (workflow_dispatch)
+# Auto:    schedule cron (see below)
 #
-# 需要的 secrets（仓库内置 GITHUB_TOKEN 已够 code search）：
-#   GITHUB_TOKEN — 自动注入，用于 api.github.com/search/code
+# ── Timezone ────────────────────────────────────────────────────────────────
+# GitHub Actions `schedule` is UTC-only. cron "27 1 * * *" → 01:27 UTC daily
+# ≈ 09:27 Asia/Shanghai (UTC+8).
+#
+# ── Secrets ─────────────────────────────────────────────────────────────────
+# Built-in GITHUB_TOKEN is injected for sources.github (code search).
+# It is never echoed and never placed in artifacts. If search hits 403/rate
+# limit the source degrades and the diagnosis lands in run-report.json.
+# Optional repo secret: NODEBENCH_GITHUB_TOKEN (fallback token).
+#
+# ── workflow_dispatch inputs ────────────────────────────────────────────────
+#   queries    newline/comma separated GitHub code-search queries;
+#              empty = profile defaults (config/profiles/actions-collect.yaml)
+#   max_files  max files per run; empty = profile default
+#
+# ── Artifact safety ─────────────────────────────────────────────────────────
+# Uploads redacted candidate summaries only (run-report.json / scored.json =
+# parsed endpoints + scored 简表). NEVER upload tokens, nodebench.db,
+# subscription raw text, proxy-raw.txt / proxy-clash.yaml, cf-addapi.txt.
 
 name: NodeBench Collect
 
@@ -18,16 +36,18 @@ on:
   workflow_dispatch:
     inputs:
       queries:
-        description: "GitHub code-search queries (comma-separated)"
+        description: "GitHub 代码搜索查询（换行或逗号分隔；留空用 profile 默认）"
         required: false
         default: ""
       max_files:
-        description: "max files per run"
+        description: "每次运行最多抓取文件数（留空用 profile 默认）"
         required: false
-        default: "30"
+        default: ""
   schedule:
-    - cron: "10 17 * * *"
+    # 27 1 * * * = 01:27 UTC daily ≈ 09:27 Asia/Shanghai (UTC+8)
+    - cron: "27 1 * * *"
 
+# Least privilege: read the repo, upload artifacts. No contents: write.
 permissions:
   contents: read
   actions: write
@@ -38,9 +58,9 @@ concurrency:
 
 jobs:
   collect:
-    name: Discover candidates via GitHub search
+    name: GitHub code search + coarse score
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     defaults:
       run:
         shell: bash
@@ -57,39 +77,68 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen
 
-      - name: Collect (GitHub + subscriptions)
+      - name: Collect + score candidates (actions-collect)
+        # GITHUB_TOKEN powers sources.github code search. Never echo it.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODEBENCH_GITHUB_TOKEN: ${{ secrets.NODEBENCH_GITHUB_TOKEN }}
+          INPUT_QUERIES: ${{ inputs.queries }}
+          INPUT_MAX_FILES: ${{ inputs.max_files }}
         run: |
           set -euo pipefail
-          EXTRA=""
-          if [ -n "${{ github.event.inputs.queries }}" ]; then
-            # 仅作展示；具体 queries 以 actions-collect.yaml 为准
-            echo "requested queries: ${{ github.event.inputs.queries }}"
+          if [ -n "${INPUT_QUERIES}" ]; then
+            # newline/comma separated → JSON list (parsed as YAML list by config)
+            export NODEBENCH_SOURCES__GITHUB__QUERIES="$(python3 -c 'import json,os; raw=os.environ["INPUT_QUERIES"]; qs=[p.strip() for p in raw.replace(",", "\n").splitlines() if p.strip()]; print(json.dumps(qs))')"
+            echo "queries override count=$(python3 -c 'import json,os; print(len(json.loads(os.environ["NODEBENCH_SOURCES__GITHUB__QUERIES"])))')"
           fi
+          if [ -n "${INPUT_MAX_FILES}" ]; then
+            export NODEBENCH_SOURCES__GITHUB__MAX_FILES_PER_RUN="${INPUT_MAX_FILES}"
+            echo "max_files override=${INPUT_MAX_FILES}"
+          fi
+          # --no-publish: candidates are diagnostics only on Actions.
           uv run nodebench run --profile actions-collect --no-publish
-        continue-on-error: true
 
-      - name: Stage safe artifacts
+      - name: Stage redacted candidate lists
+        if: always()
         run: |
           set -euo pipefail
-          mkdir -p _collect_out
-          # 只挑脱敏诊断/报告；绝不上传 db、代理凭据、订阅原文
-          find output -type f \( \
-            -name 'run-report.json' -o \
-            -name 'dry-run-report.json' -o \
-            -name 'scored.json' -o \
-            -name 'manifest.json' -o \
-            -name 'report.json' \
-          \) -print0 | while IFS= read -r -d '' f; do
-            cp "$f" "_collect_out/" 2>/dev/null || true
-          done
-          ls -la _collect_out || true
+          mkdir -p ci-artifacts
 
-      - name: Upload diagnostic artifacts
+          # Whitelist only redacted diagnostics / candidate summaries.
+          if [[ -d output ]]; then
+            while IFS= read -r -d '' f; do
+              rel="${f#output/}"
+              dest="ci-artifacts/${rel}"
+              mkdir -p "$(dirname "$dest")"
+              cp "$f" "$dest"
+            done < <(find output -type f \( \
+                -name 'run-report.json' -o \
+                -name 'dry-run-report.json' -o \
+                -name 'scored.json' \
+              \) -print0)
+          fi
+
+          # Defense in depth: drop anything sensitive that might have slipped in.
+          find ci-artifacts -type f \( \
+              -name '*.db' -o \
+              -name '*.sqlite' -o \
+              -name '*.sqlite3' -o \
+              -name 'proxy-raw.txt' -o \
+              -name 'proxy-clash.yaml' -o \
+              -name 'cf-addapi.txt' -o \
+              -name 'cf-addcsv.csv' -o \
+              -name 'manifest.json' -o \
+              -name '*.env' \
+            \) -delete
+
+          echo "Staged artifact files:"
+          find ci-artifacts -type f | sort
+
+      - name: Upload candidate lists
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: nodebench-collect-output
-          path: _collect_out/
+          name: nodebench-collect-candidates
+          path: ci-artifacts/
           if-no-files-found: warn
-          retention-days: 7
+          retention-days: 14
