@@ -825,6 +825,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="run whose export/ directory is published to output/latest",
     )
     publish_parser.add_argument(
+        "--profile",
+        default=None,
+        help="profile name (publish gates and upload come from this profile)",
+    )
+    publish_parser.add_argument(
         "--output-dir",
         default=None,
         help="directory that holds run artifacts",

@@ -1,0 +1,33 @@
+profile: cf-user-publish
+runner_id: local:desktop-a
+sources:
+  local:
+    enabled: false
+  cf:
+    enabled: true
+    candidate_files:
+      - candidates/cf-user-20260928.txt
+    max_ips_per_run: 100
+probe:
+  proxy:
+    enabled: false
+  cf:
+    enabled: true
+    cfst_path: tools/cfst/CloudflareSpeedTest.exe
+    target_host: octagoningly-vpn.pages.dev
+    speedtest_url: https://speed.cloudflare.com/__down?bytes=5000000
+    max_download_nodes: 80
+    total_deadline_s: 300
+    allowed_ports:
+      - 443
+      - 8443
+      - 2087
+      - 2053
+publish:
+  enabled: true
+  allow_proxy_credentials: false
+  cf_candidates_authorized: true
+  upload:
+    enabled: true
+    backend: folder
+    folder_path: output/publish-staging
