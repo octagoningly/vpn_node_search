@@ -39,18 +39,18 @@ WorkerVless2sub 只用优选地址**替换落地 IP**，下面这些必须是**�
 
 填完后，订阅链接由 WorkerVless2sub 生成；本项目**故意不伪造**这些字段。
 
-## 四、更新数据
+## 四、更新数据（本机实测）
 
-本机重新测速并发布：
+在**你自己的电脑**上重新测速并发布（Actions 只做候选发现，不是最终测速）：
 
 ```powershell
-uv run nodebench run --profile cf-user-publish
-# 或对已有 run：
-uv run nodebench publish --run-id <run_id> --profile cf-user-publish
+uv run nodebench run --profile auto-collect
 ```
 
-然后把 `output/publish-staging/` 里的四个文件推到仓库 `public` 分支（覆盖同名文件即可）。  
+然后把 `output/publish-staging/` 里的四个文件推到仓库 `public` 分支（覆盖同名文件）。  
 WorkerVless2sub 侧无需改 URL，下次拉取自动用新数据。
+
+本机实测的完整说明见根目录 `README.md` 的「本机实测」一节。
 
 ## 五、文件说明
 

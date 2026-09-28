@@ -50,6 +50,26 @@ uv run nodebench run --profile local
 # 订阅源与 GitHub 搜索在无网络时会被跳过（返回 not_run 模式）
 ```
 
+## 本机实测（推荐日常使用）
+
+在**自己的电脑**上跑最终测速（Actions 只做候选发现，测速口径是机房网络）：
+
+```powershell
+# 1) 确认二进制已放置（tools/mihomo、tools/cfst）
+uv run nodebench doctor
+
+# 2) 自动搜集（订阅源+GitHub+CF 候选）→ 真实测速 → 评分 → 导出 → 发布
+uv run nodebench run --profile auto-collect
+
+# 3) 看结果
+#    output/<run_id>/export/cf-addapi.txt   格式: IP:PORT#速度-纯净度-稳定性-国家
+#    output/publish-staging/                待上传到 public 分支的文件
+```
+
+测速完成后，把 `output/publish-staging/` 里四个文件覆盖推到仓库 `public` 分支，管理页 ADDAPI 链接即可自动拿到新数据（见 [`docs/WorkerVless2sub填写说明.md`](docs/WorkerVless2sub填写说明.md)）。
+
+评分权重、速度硬门槛、备注格式均可在 `config/default.yaml` 的 `scoring` 段自定义。
+
 ## 二进制获取
 
 Mihomo 与 CloudflareSpeedTest 为外部项目的二进制文件，需自行下载并放置。推荐放在 `tools/` 目录（已被 `.gitignore` 排除），或自定义路径配置：
