@@ -130,12 +130,18 @@ def persist_run(
     edges: Sequence[EdgeEndpoint],
     probe_results: Sequence[Any],
     window_days: int,
+    retention_days: int | None = None,
     now: datetime | None = None,
 ) -> PersistSummary:
-    """Persist one run into the local SQLite history database (single transaction)."""
+    """Persist one run into the local SQLite history database (single transaction).
+
+    ``window_days`` drives availability statistics; ``retention_days`` (or
+    ``window_days`` when omitted) is the prune cutoff for old runs.
+    """
     moment = now or _now()
     stamp = dbmod.utc_stamp(moment)
     rows, exits = _observation_rows(run_id, runner_id, probe_results, moment)
+    prune_window = int(window_days if retention_days is None else retention_days)
     database = str(db_path)
     conn: sqlite3.Connection | None = None
     try:
@@ -208,7 +214,7 @@ def persist_run(
                 conn.execute(dbmod.UPSERT_SOURCE_ITEM, (run_id, source_id, item_id))
         conn.executemany(dbmod.UPSERT_OBSERVATION, rows)
         conn.executemany(dbmod.UPSERT_EXIT, exits)
-        pruned = prune_runs(conn, window_days=window_days, now=moment)
+        pruned = prune_runs(conn, window_days=prune_window, now=moment)
         quality = source_quality(
             conn,
             runner_id=runner_id,

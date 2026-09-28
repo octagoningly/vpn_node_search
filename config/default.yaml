@@ -58,6 +58,7 @@ intelligence:
   timeout: 5.0
 history:
   days: 14
+  retention_days: 14
 scoring:
   weights:
     latency: 0.25

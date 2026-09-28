@@ -192,9 +192,33 @@ class IntelligenceConfig(BaseModel):
 
 
 class HistoryConfig(BaseModel):
+    """History window and retention policy.
+
+    ``days`` is the availability/statistics window (7/14-day rates).
+    ``retention_days`` is how long runs are kept before ``prune_runs``
+    deletes them; ``None`` keeps data as long as ``days``.
+    """
+
     model_config = ConfigDict(extra="forbid")
 
     days: int = 14
+    retention_days: int | None = None
+
+    @field_validator("days", mode="before")
+    @classmethod
+    def _positive_days(cls, value: Any) -> Any:
+        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            raise ValueError("history.days must be a positive integer")
+        return value
+
+    @field_validator("retention_days", mode="before")
+    @classmethod
+    def _valid_retention(cls, value: Any) -> Any:
+        if value is None:
+            return None
+        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            raise ValueError("history.retention_days must be a positive integer or null")
+        return value
 
 
 class ScoringWeights(BaseModel):

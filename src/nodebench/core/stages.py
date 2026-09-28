@@ -157,6 +157,7 @@ def run_persist_stage(
         edges=edges,
         probe_results=probe_results,
         window_days=int(config.history.days),
+        retention_days=config.history.retention_days,
     )
     return public_dump(summary)
 
