@@ -333,13 +333,22 @@
     {
       title: "1 · GitHub 认证",
       html: `
-        <p>先连 GitHub —— 认证后自动拿到你的用户名，raw 链接就不用手填了。</p>
-        <a class="wiz-link" href="https://github.com/settings/tokens/new?scopes=public_repo&description=NodeBench" target="_blank">
-          创建 Token <small>只需 public_repo 权限 → 前往创建</small>
+        <p>先连 GitHub —— 认证后自动拿到用户名，raw 链接就不用手填了。</p>
+
+        <a class="wiz-link" href="https://github.com/settings/tokens/new?scopes=public_repo&description=NodeBench&expires=0" target="_blank">
+          ① 点击前往创建 Token <small>打开 GitHub 创建令牌页 →</small>
         </a>
-        <input class="input" id="wizGithub" placeholder="粘贴 GitHub Token（ghp_ 或 github_pat_）" style="margin:8px 0" />
+        <div class="howto">
+          <div class="howto-step">② 在新页面找到 <b>Note</b>，随便填（如 <code>NodeBench</code>）</div>
+          <div class="howto-step">③ <b>Expiration</b>（过期时间）选 <b>No expiration</b>（永久有效）</div>
+          <div class="howto-step">④ <b>勾选 repo → public_repo</b>（只要这一个权限就够）</div>
+          <div class="howto-step">⑤ 点页面底部 <b>Generate token</b>（生成令牌）</div>
+          <div class="howto-step">⑥ <b>复制</b> 生成的 ghp_ 开头令牌，回到这里粘贴 ↓</div>
+        </div>
+
+        <input class="input" id="wizGithub" placeholder="粘贴 GitHub Token（ghp_… 或 github_pat_…）" style="margin:10px 0" />
         <div class="row">
-          <button class="btn btn-primary" id="wizAuth">认证并获取用户名</button>
+          <button class="btn btn-primary" id="wizAuth">⑦ 认证并获取用户名</button>
         </div>
         <div id="wizAuthOut" class="repo-result"></div>`,
       btn: "下一步",
@@ -355,21 +364,35 @@
           </div>
           <div id="wizRepoOut" class="repo-result"></div>
         </div>
-        <p class="hint">已有仓库？直接下一步，链接会按默认名拼好。</p>`,
+        <div class="howto">
+          <div class="howto-step">软件会自动：创建仓库 → 拼好 raw 链接，你不用做别的</div>
+          <div class="howto-step">已有仓库？直接点下一步，链接会按默认名 <code>cf-ip-pool</code> 拼好</div>
+        </div>`,
       btn: "下一步",
     },
     {
       title: "3 · 其它密钥",
       html: `
         <p>纯净度 + 属地。可稍后再填。</p>
+
         <a class="wiz-link" href="https://www.abuseipdb.com/account/api/keys" target="_blank">
-          AbuseIPDB Key <small>纯净度检测 → 前往获取</small>
+          ① 点击前往 AbuseIPDB <small>打开密钥页 →</small>
         </a>
-        <input class="input" id="wizAbuse" placeholder="粘贴 AbuseIPDB Key" style="margin:4px 0 10px" />
+        <div class="howto">
+          <div class="howto-step">② 登录后点 <b>My Account → API Keys</b></div>
+          <div class="howto-step">③ 点 <b>Create New Key</b>，名字随意</div>
+          <div class="howto-step">④ <b>复制</b> 生成的 Key，粘贴到下面 ↓</div>
+        </div>
+        <input class="input" id="wizAbuse" placeholder="粘贴 AbuseIPDB Key" style="margin:6px 0 14px" />
+
         <a class="wiz-link" href="https://ipinfo.io/dashboard" target="_blank">
-          IPinfo Token <small>属地 / ASN → 前往获取</small>
+          ① 点击前往 IPinfo <small>打开仪表盘，右上角就是 Token →</small>
         </a>
-        <input class="input" id="wizIpinfo" placeholder="粘贴 IPinfo Token" style="margin:4px 0 0" />`,
+        <div class="howto">
+          <div class="howto-step">② 登录后在 <b>API Tokens</b> 页面 <b>复制</b> 令牌</div>
+          <div class="howto-step">③ 粘贴到下面 ↓</div>
+        </div>
+        <input class="input" id="wizIpinfo" placeholder="粘贴 IPinfo Token" style="margin:6px 0 0" />`,
       btn: "保存并继续",
     },
     {

@@ -168,6 +168,63 @@ def scrub_url(text: str) -> str:
     return re.sub(r"https?://[^\s\"'<>]+", "[redacted-url]", str(text or ""))
 
 
+_SYSTEM_OPENER: Any = None
+
+
+def system_proxies() -> dict[str, str]:
+    """Windows system proxy (IE/WinINET registry) + env proxies."""
+    proxies = dict(urllib.request.getproxies())
+    if os.name != "nt":
+        return proxies
+    try:
+        import winreg
+
+        key = winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            r"Software\Microsoft\Windows\CurrentVersion\Internet Settings",
+            0,
+            winreg.KEY_READ,
+        )
+        try:
+            enable, _ = winreg.QueryValueEx(key, "ProxyEnable")
+            server, _ = winreg.QueryValueEx(key, "ProxyServer")
+        except OSError:
+            return proxies
+        finally:
+            winreg.CloseKey(key)
+        if not enable or not server:
+            return proxies
+        server = str(server).strip()
+        if "=" in server and ";" in server:
+            for part in server.split(";"):
+                if "=" in part:
+                    k, _, v = part.partition("=")
+                    proxies[k.strip().lower()] = f"http://{v.strip()}"
+        else:
+            proxies.setdefault("http", f"http://{server}")
+            proxies.setdefault("https", f"http://{server}")
+    except Exception:
+        pass
+    return proxies
+
+
+def install_system_proxy() -> None:
+    """Make urllib.request.urlopen honour system proxy (Clash etc.)."""
+    global _SYSTEM_OPENER
+    proxies = system_proxies()
+    if not proxies:
+        return
+    if _SYSTEM_OPENER is None:
+        _SYSTEM_OPENER = urllib.request.build_opener(
+            urllib.request.ProxyHandler(proxies)
+        )
+        urllib.request.install_opener(_SYSTEM_OPENER)
+
+
+# Honour Clash / system proxy at import time so TLS works behind local proxies.
+install_system_proxy()
+
+
 def validate_url(url: str) -> urllib.parse.ParseResult:
     parsed = urllib.parse.urlparse(url)
     if parsed.scheme.lower() != "https":

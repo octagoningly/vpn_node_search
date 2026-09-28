@@ -90,32 +90,19 @@ def save_config(data: dict) -> None:
 def gh_api(path: str, method: str = "GET", payload: dict | None = None) -> dict:
     token = load_env().get("GITHUB_TOKEN", "").strip()
     if not token:
-        raise RuntimeError("未配置 GITHUB_TOKEN，请先在「密钥」页填写")
-    data = None if payload is None else json.dumps(payload).encode()
-    req = urllib.request.Request(
+        raise RuntimeError("未配置 GITHUB_TOKEN，请先认证")
+    from netproxy import request_json
+
+    return request_json(
         f"https://api.github.com{path}",
-        data=data,
         method=method,
         headers={
             "Authorization": f"Bearer {token}",
-            "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28",
-            "User-Agent": "NodeBench",
             "Content-Type": "application/json",
         },
+        payload=payload,
     )
-    try:
-        with urllib.request.urlopen(req, timeout=25) as resp:
-            return json.loads(resp.read().decode())
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode("utf-8", "replace")
-        try:
-            msg = json.loads(body).get("message", body)
-        except Exception:
-            msg = body
-        raise RuntimeError(f"GitHub API {exc.code}: {msg}") from exc
-    except urllib.error.URLError as exc:
-        raise RuntimeError(f"网络错误: {exc.reason}") from exc
 
 
 def repo_raw_urls(name: str, login: str | None = None) -> dict:

@@ -234,8 +234,13 @@
               <div class="key-desc">用于搜索候选源、推送 public 分支</div>
             </div>
             <input class="input key-input" id="keyGithub" type="password" placeholder="ghp_… 或 github_pat_…" />
-            <a class="btn btn-ghost" href="https://github.com/settings/tokens/new?scopes=public_repo&description=NodeBench"
-               target="_blank" rel="noreferrer">创建 Token ↗</a>
+            <a class="btn btn-primary" href="https://github.com/settings/tokens/new?scopes=public_repo&description=NodeBench&expires=0"
+               target="_blank" rel="noreferrer">① 前往创建 Token →</a>
+          </div>
+          <div class="howto" style="margin-top:12px">
+            <div class="howto-step">② <b>Expiration</b> 选 <b>No expiration</b>（永久有效）</div>
+            <div class="howto-step">③ 只勾 <b>public_repo</b> → 点底部 <b>Generate token</b></div>
+            <div class="howto-step">④ 复制 ghp_ 开头令牌 → 粘贴到左边 → 点右上「保存」</div>
           </div>
           <div class="row" style="margin-top:14px">
             <button class="btn btn-primary" id="btnCreateRepo">一键创建公开仓库</button>
@@ -252,8 +257,12 @@
               <div class="key-desc">滥用投诉分 → 纯净度</div>
             </div>
             <input class="input key-input" id="keyAbuse" type="password" placeholder="80 位密钥" />
-            <a class="btn btn-ghost" href="https://www.abuseipdb.com/account/api/keys"
-               target="_blank" rel="noreferrer">获取 Key ↗</a>
+            <a class="btn btn-primary" href="https://www.abuseipdb.com/account/api/keys"
+               target="_blank" rel="noreferrer">① 前往获取 Key →</a>
+          </div>
+          <div class="howto" style="margin-top:12px">
+            <div class="howto-step">② 登录后点 <b>Create New Key</b></div>
+            <div class="howto-step">③ 复制 Key → 粘贴到左边 → 保存</div>
           </div>
         </div>
 
@@ -265,8 +274,12 @@
               <div class="key-desc">更准的城市 / 国家 / ASN</div>
             </div>
             <input class="input key-input" id="keyIpinfo" type="password" placeholder="如 760eddc…" />
-            <a class="btn btn-ghost" href="https://ipinfo.io/dashboard"
-               target="_blank" rel="noreferrer">获取 Token ↗</a>
+            <a class="btn btn-primary" href="https://ipinfo.io/dashboard"
+               target="_blank" rel="noreferrer">① 前往获取 Token →</a>
+          </div>
+          <div class="howto" style="margin-top:12px">
+            <div class="howto-step">② 在 <b>API Tokens</b> 页复制令牌</div>
+            <div class="howto-step">③ 粘贴到左边 → 保存</div>
           </div>
         </div>
 
