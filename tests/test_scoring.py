@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from nodebench.core.config import ScoringCfWeights, ScoringConfig, ScoringFilters
+from nodebench.core.config import ScoringCfWeights, ScoringConfig, ScoringFilters, ScoringWeights
 from nodebench.core.schema import (
     EdgeEndpoint,
     EndpointProbeResult,
@@ -14,16 +14,19 @@ from nodebench.core.schema import (
     ProxyProbeResult,
     ScoreReport,
 )
+from nodebench.intelligence.geo import GeoResult
 from nodebench.scoring import (
     SCORING_VERSION,
     latency_score,
     loss_score,
+    make_geo_lookup,
     purity_score,
     score_run,
     speed_score,
     stability_score,
     weighted_score,
 )
+from nodebench.scoring.rules import CF_ANYCAST_NEUTRAL_RISK
 
 RUN_ID = "20260101T000000Z-abcdef"
 RUNNER = "local:desktop-a"
@@ -128,6 +131,7 @@ def run_score(
     endpoint_history: dict | None = None,
     scoring: ScoringConfig | None = None,
     history_days: int = WINDOW,
+    geo_lookup=None,
 ) -> ScoreReport:
     return score_run(
         run_id=RUN_ID,
@@ -140,6 +144,7 @@ def run_score(
         endpoint_history=endpoint_history,
         scoring=scoring or ScoringConfig(),
         history_days=history_days,
+        geo_lookup=geo_lookup,
     )
 
 
@@ -161,6 +166,7 @@ def history(
             )
         }
     }
+
 
 
 class TestRules:
@@ -212,7 +218,7 @@ class TestRules:
 class TestProxyScoring:
     def test_ok_probe_is_ranked(self) -> None:
         report = run_score(
-            nodes=(make_node(),),
+            nodes=(make_node("p1", risk=10.0),),
             results=(make_ok_result(),),
         )
         assert report.counts["ranked"] == 1
@@ -220,7 +226,8 @@ class TestProxyScoring:
         assert item.status == "ranked"
         assert item.rank == 1
         assert 0.0 < item.score <= 1.0
-        assert set(item.score_breakdown) == {"latency", "speed", "loss"}
+        assert set(item.score_breakdown) == {"latency", "speed", "loss", "purity"}
+        assert item.score_breakdown["purity"] == pytest.approx(0.9)
         assert item.probe_status == "ok"
         assert item.probe_mode == "real"
         assert item.observed_at is not None
@@ -228,6 +235,26 @@ class TestProxyScoring:
         assert item.rule_snapshot["scoring_version"] == SCORING_VERSION
         assert item.notes["stability_samples_insufficient"] is True
         assert item.notes["stability_penalty"] == pytest.approx(0.9)
+
+    def test_purity_missing_is_pending_or_exclude(self) -> None:
+        report = run_score(
+            nodes=(make_node("p1"),),
+            results=(make_ok_result("p1"),),
+        )
+        item = report.proxies[0]
+        assert item.status == "pending"
+        assert "purity" in item.pending
+        assert item.filters_failed == []
+
+        exclude = ScoringConfig(filters=ScoringFilters(missing="exclude"))
+        report = run_score(
+            nodes=(make_node("p1"),),
+            results=(make_ok_result("p1"),),
+            scoring=exclude,
+        )
+        item = report.proxies[0]
+        assert item.status == "filtered"
+        assert item.filters_failed == ["missing_purity"]
 
     def test_missing_probe_pending_then_exclude(self) -> None:
         report = run_score(nodes=(make_node(),))
@@ -279,10 +306,13 @@ class TestProxyScoring:
         assert item.filters_failed == ["probe"]
         assert item.probe_status == "fail"
 
+
     def test_simulated_filtered_when_real_required(self) -> None:
         simulated = make_ok_result()
         simulated.probe_mode = ProbeMode.SIMULATED
-        report = run_score(nodes=(make_node(),), results=(simulated,))
+        report = run_score(
+            nodes=(make_node("p1", risk=10.0),), results=(simulated,)
+        )
         item = report.proxies[0]
         assert item.status == "filtered"
         assert item.filters_failed == ["probe_mode"]
@@ -291,14 +321,18 @@ class TestProxyScoring:
             filters=ScoringFilters(require_real_probe_success=False)
         )
         report = run_score(
-            nodes=(make_node(),), results=(simulated,), scoring=relaxed
+            nodes=(make_node("p1", risk=10.0),),
+            results=(simulated,),
+            scoring=relaxed,
         )
         assert report.proxies[0].status == "ranked"
 
     def test_not_run_mode_filtered_when_real_required(self) -> None:
         not_run = make_ok_result()
         not_run.probe_mode = ProbeMode.NOT_RUN
-        report = run_score(nodes=(make_node(),), results=(not_run,))
+        report = run_score(
+            nodes=(make_node("p1", risk=10.0),), results=(not_run,)
+        )
         item = report.proxies[0]
         assert item.status == "filtered"
         assert item.filters_failed == ["probe_mode"]
@@ -306,25 +340,29 @@ class TestProxyScoring:
         relaxed = ScoringConfig(
             filters=ScoringFilters(require_real_probe_success=False)
         )
-        report = run_score(nodes=(make_node(),), results=(not_run,), scoring=relaxed)
+        report = run_score(
+            nodes=(make_node("p1", risk=10.0),),
+            results=(not_run,),
+            scoring=relaxed,
+        )
         assert report.proxies[0].status == "ranked"
 
     def test_country_filter(self) -> None:
         scoring = ScoringConfig(filters=ScoringFilters(allowed_countries=["US"]))
         report = run_score(
-            nodes=(make_node("p1", country="DE"),),
+            nodes=(make_node("p1", country="DE", risk=10.0),),
             results=(make_ok_result("p1"),),
             scoring=scoring,
         )
         assert report.proxies[0].filters_failed == ["country"]
         report = run_score(
-            nodes=(make_node("p1", country="US"),),
+            nodes=(make_node("p1", country="US", risk=10.0),),
             results=(make_ok_result("p1"),),
             scoring=scoring,
         )
         assert report.proxies[0].status == "ranked"
         report = run_score(
-            nodes=(make_node("p1"),),
+            nodes=(make_node("p1", risk=10.0),),
             results=(make_ok_result("p1"),),
             scoring=scoring,
         )
@@ -346,19 +384,38 @@ class TestProxyScoring:
 
     def test_latency_and_speed_filters(self) -> None:
         report = run_score(
-            nodes=(make_node(),),
+            nodes=(make_node("p1", risk=10.0),),
             results=(make_ok_result(latency=900.0),),
         )
         assert report.proxies[0].filters_failed == ["latency"]
         report = run_score(
-            nodes=(make_node(),),
+            nodes=(make_node("p1", risk=10.0),),
             results=(make_ok_result(speed=0.2),),
         )
         assert report.proxies[0].filters_failed == ["speed"]
 
+    def test_speed_hard_gate_locked(self) -> None:
+        report = run_score(
+            nodes=(make_node("p1", risk=10.0),),
+            results=(make_ok_result(speed=0.2),),
+        )
+        item = report.proxies[0]
+        assert item.status == "filtered"
+        assert "speed" in item.filters_failed
+
+        relaxed = ScoringConfig(filters=ScoringFilters(require_speed=False))
+        report = run_score(
+            nodes=(make_node("p1", risk=10.0),),
+            results=(make_ok_result(speed=0.2),),
+            scoring=relaxed,
+        )
+        item = report.proxies[0]
+        assert item.status == "ranked"
+        assert "speed" not in item.filters_failed
+
     def test_critical_dimension_missing(self) -> None:
         report = run_score(
-            nodes=(make_node(),),
+            nodes=(make_node("p1", risk=10.0),),
             results=(make_ok_result(speed=None),),
         )
         item = report.proxies[0]
@@ -367,7 +424,7 @@ class TestProxyScoring:
 
         exclude = ScoringConfig(filters=ScoringFilters(missing="exclude"))
         report = run_score(
-            nodes=(make_node(),),
+            nodes=(make_node("p1", risk=10.0),),
             results=(make_ok_result(speed=None),),
             scoring=exclude,
         )
@@ -375,9 +432,10 @@ class TestProxyScoring:
         assert item.status == "filtered"
         assert item.filters_failed == ["missing_speed_mb_s"]
 
+
     def test_stability_dimension_from_history(self) -> None:
         report = run_score(
-            nodes=(make_node(),),
+            nodes=(make_node("p1", risk=10.0),),
             results=(make_ok_result(),),
             proxy_history=history("p1", samples=5, availability=0.8),
         )
@@ -389,7 +447,7 @@ class TestProxyScoring:
 
     def test_low_sample_penalty_excludes_stability(self) -> None:
         report = run_score(
-            nodes=(make_node(),),
+            nodes=(make_node("p1", risk=10.0),),
             results=(make_ok_result(),),
             proxy_history=history("p1", samples=1, availability=1.0),
         )
@@ -399,17 +457,77 @@ class TestProxyScoring:
         assert item.notes["stability_samples_insufficient"] is True
         assert item.notes["stability_penalty"] == pytest.approx(0.9)
 
+    def test_stability_weight_shifts_score(self) -> None:
+        stable = history("p1", samples=5, availability=1.0)
+        weak = history("p1", samples=5, availability=0.2)
+        scoring = ScoringConfig(
+            weights=ScoringWeights(
+                latency=0.4, speed=0.4, purity=0.0, stability=0.2, loss=0.0
+            )
+        )
+        high = run_score(
+            nodes=(make_node("p1", risk=0.0),),
+            results=(make_ok_result(),),
+            proxy_history=stable,
+            scoring=scoring,
+        ).proxies[0]
+        low = run_score(
+            nodes=(make_node("p1", risk=0.0),),
+            results=(make_ok_result(),),
+            proxy_history=weak,
+            scoring=scoring,
+        ).proxies[0]
+        assert high.score > low.score
+        assert high.score_breakdown["stability"] == pytest.approx(1.0)
+        assert low.score_breakdown["stability"] == pytest.approx(0.2)
+
+    def test_custom_weights_change_breakdown(self) -> None:
+        heavy_speed = ScoringConfig(
+            weights=ScoringWeights(
+                latency=0.1, speed=0.8, purity=0.05, stability=0.05, loss=0.0
+            )
+        )
+        heavy_latency = ScoringConfig(
+            weights=ScoringWeights(
+                latency=0.8, speed=0.1, purity=0.05, stability=0.05, loss=0.0
+            )
+        )
+        fast_high_latency = make_ok_result("p1", latency=600.0, speed=20.0)
+        speed_first = run_score(
+            nodes=(make_node("p1", risk=10.0),),
+            results=(fast_high_latency,),
+            scoring=heavy_speed,
+            proxy_history=history("p1", samples=5, availability=1.0),
+        ).proxies[0]
+        latency_first = run_score(
+            nodes=(make_node("p1", risk=10.0),),
+            results=(fast_high_latency,),
+            scoring=heavy_latency,
+            proxy_history=history("p1", samples=5, availability=1.0),
+        ).proxies[0]
+        assert speed_first.score > latency_first.score
+        snap = speed_first.rule_snapshot
+        assert snap["weights"]["speed"] == pytest.approx(0.8)
+        assert snap["filters"]["min_speed_mb_s"] == pytest.approx(0.5)
+        assert snap["filters"]["require_speed"] is True
+
     def test_speed_mbps_fallback_conversion(self) -> None:
         result = make_ok_result(speed=None)
         result.download_bytes = 1_000_000
         result.speed_mbps = 800.0
-        report = run_score(nodes=(make_node(),), results=(result,))
+        report = run_score(
+            nodes=(make_node("p1", risk=10.0),), results=(result,)
+        )
         item = report.proxies[0]
         assert item.speed_mb_s == pytest.approx(100.0)
 
     def test_rank_order_and_tie_breaks(self) -> None:
         report = run_score(
-            nodes=(make_node("p-slow"), make_node("p-fast"), make_node("p-mid")),
+            nodes=(
+                make_node("p-slow", risk=10.0),
+                make_node("p-fast", risk=10.0),
+                make_node("p-mid", risk=10.0),
+            ),
             results=(
                 make_ok_result("p-slow", latency=600.0),
                 make_ok_result("p-fast", latency=100.0),
@@ -424,7 +542,7 @@ class TestProxyScoring:
         assert [item.rank for item in ranked] == [1, 2, 3]
 
         report = run_score(
-            nodes=(make_node("pb"), make_node("pa")),
+            nodes=(make_node("pb", risk=10.0), make_node("pa", risk=10.0)),
             results=(make_ok_result("pb"), make_ok_result("pa")),
         )
         ranked = sorted(
@@ -434,7 +552,7 @@ class TestProxyScoring:
         assert [item.item_id for item in ranked] == ["pa", "pb"]
 
         filtered = run_score(
-            nodes=(make_node("p1"), make_node("p2")),
+            nodes=(make_node("p1", risk=10.0), make_node("p2", risk=10.0)),
             results=(make_ok_result("p1", latency=900.0), make_ok_result("p2")),
         )
         for item in filtered.proxies:
@@ -442,9 +560,14 @@ class TestProxyScoring:
                 assert item.rank == 0
 
 
+
 class TestEndpointScoring:
-    def test_ok_endpoint_ranked_with_compatibility(self) -> None:
-        report = run_score(edges=(make_edge(),), results=(make_eok(),))
+    def test_ok_endpoint_ranked_with_full_dims(self) -> None:
+        report = run_score(
+            edges=(make_edge("e1", risk=10.0),),
+            results=(make_eok("e1"),),
+            endpoint_history=history("e1", samples=5, availability=0.9),
+        )
         item = report.endpoints[0]
         assert item.status == "ranked"
         assert item.rank == 1
@@ -453,13 +576,71 @@ class TestEndpointScoring:
             "latency",
             "speed",
             "loss",
+            "purity",
+            "stability",
         }
         assert item.score_breakdown["compatibility"] == 1.0
+        assert item.score_breakdown["purity"] == pytest.approx(0.9)
+        assert item.score_breakdown["stability"] == pytest.approx(0.9)
         assert item.host_compatible is True
+
+    def test_endpoint_stability_insufficient_samples(self) -> None:
+        report = run_score(
+            edges=(make_edge("e1", risk=10.0),),
+            results=(make_eok("e1"),),
+            endpoint_history=history("e1", samples=1, availability=1.0),
+        )
+        item = report.endpoints[0]
+        assert item.status == "ranked"
+        assert "stability" not in item.score_breakdown
+        assert item.notes["stability_samples_insufficient"] is True
+        assert item.notes["stability_penalty"] == pytest.approx(0.9)
+
+    def test_endpoint_purity_missing_pending(self) -> None:
+        report = run_score(
+            edges=(make_edge("e1"),),
+            results=(make_eok("e1"),),
+        )
+        item = report.endpoints[0]
+        assert item.status == "pending"
+        assert "purity" in item.pending
+
+        exclude = ScoringConfig(filters=ScoringFilters(missing="exclude"))
+        report = run_score(
+            edges=(make_edge("e1"),),
+            results=(make_eok("e1"),),
+            scoring=exclude,
+        )
+        item = report.endpoints[0]
+        assert item.status == "filtered"
+        assert "missing_purity" in item.filters_failed
+
+    def test_endpoint_cf_anycast_neutral_purity(self) -> None:
+        report = run_score(
+            edges=(make_edge("e1", asn="AS13335 Cloudflare"),),
+            results=(make_eok("e1"),),
+        )
+        item = report.endpoints[0]
+        assert item.status == "ranked"
+        assert item.risk == pytest.approx(CF_ANYCAST_NEUTRAL_RISK)
+        assert item.score_breakdown["purity"] == pytest.approx(
+            purity_score(CF_ANYCAST_NEUTRAL_RISK)
+        )
+        assert item.notes.get("purity_source") == "cf_anycast_neutral"
+
+    def test_endpoint_max_risk_filter(self) -> None:
+        report = run_score(
+            edges=(make_edge("e1", risk=80.0),),
+            results=(make_eok("e1"),),
+        )
+        item = report.endpoints[0]
+        assert item.status == "filtered"
+        assert "risk" in item.filters_failed
 
     def test_incompatible_endpoint_filtered(self) -> None:
         report = run_score(
-            edges=(make_edge(),), results=(make_eok(host_compatible=False),)
+            edges=(make_edge("e1", risk=10.0),),
+            results=(make_eok("e1", host_compatible=False),),
         )
         item = report.endpoints[0]
         assert item.status == "filtered"
@@ -467,7 +648,8 @@ class TestEndpointScoring:
 
     def test_unknown_compatibility_is_critical_missing(self) -> None:
         report = run_score(
-            edges=(make_edge(),), results=(make_eok(host_compatible=None),)
+            edges=(make_edge("e1", risk=10.0),),
+            results=(make_eok("e1", host_compatible=None),),
         )
         item = report.endpoints[0]
         assert item.status == "pending"
@@ -475,40 +657,160 @@ class TestEndpointScoring:
 
         exclude = ScoringConfig(filters=ScoringFilters(missing="exclude"))
         report = run_score(
-            edges=(make_edge(),),
-            results=(make_eok(host_compatible=None),),
+            edges=(make_edge("e1", risk=10.0),),
+            results=(make_eok("e1", host_compatible=None),),
             scoring=exclude,
         )
         assert report.endpoints[0].filters_failed == ["missing_host_compatible"]
 
-    def test_country_filter_does_not_apply_to_endpoints(self) -> None:
+    def test_country_filter_applies_to_endpoints(self) -> None:
         scoring = ScoringConfig(filters=ScoringFilters(allowed_countries=["US"]))
         report = run_score(
-            edges=(make_edge(),), results=(make_eok(),), scoring=scoring
+            edges=(make_edge("e1", risk=10.0, region="DE"),),
+            results=(make_eok("e1"),),
+            scoring=scoring,
+        )
+        assert report.endpoints[0].filters_failed == ["country"]
+
+        report = run_score(
+            edges=(make_edge("e1", risk=10.0, region="US"),),
+            results=(make_eok("e1"),),
+            scoring=scoring,
         )
         assert report.endpoints[0].status == "ranked"
+        assert report.endpoints[0].country_code == "US"
+
+
+    def test_country_from_cfst_region(self) -> None:
+        report = run_score(
+            edges=(make_edge("e1", risk=10.0),),
+            results=(make_eok("e1", region="SG"),),
+        )
+        assert report.endpoints[0].country_code == "SG"
+
+    def test_country_from_geo_lookup(self) -> None:
+        calls: list[str] = []
+
+        def fake_geo(address: str):
+            calls.append(address)
+            return GeoResult(country_code="JP", asn="AS2497", isp="IIJ")
+
+        report = run_score(
+            edges=(make_edge("e1", risk=10.0),),
+            results=(make_eok("e1"),),
+            geo_lookup=fake_geo,
+        )
+        item = report.endpoints[0]
+        assert item.country_code == "JP"
+        assert calls == ["1.1.1.1"]
+
+    def test_geo_lookup_failure_is_unknown(self) -> None:
+        report = run_score(
+            edges=(make_edge("e1", risk=10.0),),
+            results=(make_eok("e1"),),
+            geo_lookup=lambda address: None,
+        )
+        assert report.endpoints[0].country_code is None
 
     def test_endpoint_latency_and_speed_filters(self) -> None:
         report = run_score(
-            edges=(make_edge(),), results=(make_eok(latency=900.0),)
+            edges=(make_edge("e1", risk=10.0),),
+            results=(make_eok("e1", latency=900.0),),
         )
         assert report.endpoints[0].filters_failed == ["latency"]
         report = run_score(
-            edges=(make_edge(),), results=(make_eok(speed=0.1),)
+            edges=(make_edge("e1", risk=10.0),),
+            results=(make_eok("e1", speed=0.1),),
         )
         assert report.endpoints[0].filters_failed == ["speed"]
 
+    def test_endpoint_speed_hard_gate(self) -> None:
+        report = run_score(
+            edges=(make_edge("e1", risk=10.0),),
+            results=(make_eok("e1", speed=0.1),),
+        )
+        item = report.endpoints[0]
+        assert item.status == "filtered"
+        assert "speed" in item.filters_failed
+
+        relaxed = ScoringConfig(filters=ScoringFilters(require_speed=False))
+        report = run_score(
+            edges=(make_edge("e1", risk=10.0),),
+            results=(make_eok("e1", speed=0.1),),
+            scoring=relaxed,
+        )
+        item = report.endpoints[0]
+        assert item.status == "ranked"
+        assert "speed" not in item.filters_failed
+
+    def test_endpoint_custom_cf_weights(self) -> None:
+        scoring = ScoringConfig(
+            cf_weights=ScoringCfWeights(
+                compatibility=0.1,
+                latency=0.1,
+                speed=0.1,
+                loss=0.1,
+                purity=0.5,
+                stability=0.1,
+            )
+        )
+        report = run_score(
+            edges=(make_edge("e1", risk=0.0),),
+            results=(make_eok("e1"),),
+            endpoint_history=history("e1", samples=5, availability=1.0),
+            scoring=scoring,
+        )
+        item = report.endpoints[0]
+        assert item.rule_snapshot["cf_weights"]["purity"] == pytest.approx(0.5)
+        assert item.score_breakdown["purity"] == pytest.approx(1.0)
+        dirty = run_score(
+            edges=(make_edge("e2", risk=50.0),),
+            results=(make_eok("e2"),),
+            endpoint_history=history("e2", samples=5, availability=1.0),
+            scoring=scoring,
+        ).endpoints[0]
+        assert item.score > dirty.score
+
     def test_endpoint_missing_probe_pending(self) -> None:
-        report = run_score(edges=(make_edge(),))
+        report = run_score(edges=(make_edge("e1", risk=10.0),))
         assert report.endpoints[0].status == "pending"
         assert report.endpoints[0].pending == ["probe"]
+
+
+class TestGeoLookupHelper:
+    def test_make_geo_lookup_caches_and_bounds(self) -> None:
+        calls: list[str] = []
+
+        def fake(ip: str, url: str, timeout: float) -> GeoResult:
+            calls.append(ip)
+            return GeoResult(country_code="US", asn="AS13335", isp="Cloudflare")
+
+        lookup = make_geo_lookup(base_url="https://geo.example", lookup=fake)
+        first = lookup("1.1.1.1")
+        second = lookup("1.1.1.1")
+        assert first is second
+        assert calls == ["1.1.1.1"]
+        assert lookup("not-an-ip") is None
+        assert lookup("") is None
+
+    def test_make_geo_lookup_without_base_url_is_offline(self) -> None:
+        calls: list[str] = []
+
+        def fake(ip: str, url: str, timeout: float) -> GeoResult:
+            calls.append(ip)
+            return GeoResult(country_code="US", asn="AS13335", isp="Cloudflare")
+
+        lookup = make_geo_lookup(base_url="", lookup=fake)
+        assert lookup("1.1.1.1") is None
+        assert calls == []
+
 
 
 class TestReport:
     def test_counts_and_round_trip(self) -> None:
         report = run_score(
-            nodes=(make_node("p1"), make_node("p2")),
-            edges=(make_edge("e1"),),
+            nodes=(make_node("p1", risk=10.0), make_node("p2", risk=10.0)),
+            edges=(make_edge("e1", risk=10.0),),
             results=(
                 make_ok_result("p1"),
                 make_eok("e1", latency=900.0),
@@ -531,14 +833,14 @@ class TestReport:
 
     def test_duplicate_probe_results_first_wins(self) -> None:
         report = run_score(
-            nodes=(make_node(),),
+            nodes=(make_node("p1", risk=10.0),),
             results=(make_ok_result(latency=100.0), make_ok_result(latency=700.0)),
         )
         assert report.proxies[0].latency_ms == pytest.approx(100.0)
 
     def test_endpoint_orphan_issue_kind(self) -> None:
         report = run_score(
-            edges=(make_edge("e1"),),
+            edges=(make_edge("e1", risk=10.0),),
             results=(make_eok("e1"), make_eok("ghost-e")),
         )
         assert report.issues[0].item_id == "ghost-e"
@@ -547,9 +849,29 @@ class TestReport:
 
     def test_default_scoring_config_has_cf_weights(self) -> None:
         config = ScoringConfig()
-        assert config.cf_weights.compatibility == pytest.approx(0.35)
-        assert config.cf_weights.latency == pytest.approx(0.25)
-        assert config.cf_weights.speed == pytest.approx(0.25)
-        assert config.cf_weights.loss == pytest.approx(0.15)
+        assert config.cf_weights.compatibility == pytest.approx(0.25)
+        assert config.cf_weights.latency == pytest.approx(0.17)
+        assert config.cf_weights.speed == pytest.approx(0.17)
+        assert config.cf_weights.loss == pytest.approx(0.11)
+        assert config.cf_weights.purity == pytest.approx(0.15)
+        assert config.cf_weights.stability == pytest.approx(0.15)
+        assert config.filters.require_speed is True
         with pytest.raises(ValueError):
             ScoringCfWeights(compatibility=-1.0)
+        with pytest.raises(ValueError):
+            ScoringCfWeights(purity=-0.1)
+
+    def test_rule_snapshot_records_weights_and_thresholds(self) -> None:
+        report = run_score(
+            nodes=(make_node("p1", risk=10.0),),
+            results=(make_ok_result(),),
+        )
+        snap = report.rule_snapshot
+        assert snap["weights"]["purity"] == pytest.approx(0.25)
+        assert snap["weights"]["stability"] == pytest.approx(0.15)
+        assert snap["cf_weights"]["purity"] == pytest.approx(0.15)
+        assert snap["cf_weights"]["stability"] == pytest.approx(0.15)
+        assert snap["filters"]["min_speed_mb_s"] == pytest.approx(0.5)
+        assert snap["filters"]["max_risk"] == pytest.approx(50.0)
+        assert snap["filters"]["require_speed"] is True
+        assert snap["cf_anycast_neutral_risk"] == pytest.approx(30.0)

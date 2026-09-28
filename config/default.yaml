@@ -73,12 +73,15 @@ scoring:
     stability: 0.15
     loss: 0.10
   cf_weights:
-    compatibility: 0.35
-    latency: 0.25
-    speed: 0.25
-    loss: 0.15
+    compatibility: 0.25
+    latency: 0.17
+    speed: 0.17
+    loss: 0.11
+    purity: 0.15
+    stability: 0.15
   filters:
     require_real_probe_success: true
+    require_speed: true
     max_latency_ms: 800.0
     min_speed_mb_s: 0.5
     max_risk: 50.0

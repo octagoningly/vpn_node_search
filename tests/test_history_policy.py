@@ -36,7 +36,7 @@ def make_node(item_id: str = "node-1") -> ProxyNode:
         port=443,
         transport="tcp",
         security="tls",
-        params={},
+        params={"risk": 10.0},
         secrets={"uuid": "123e4567-e89b-12d3-a456-426614174000"},
         source_ids=["local"],
     )

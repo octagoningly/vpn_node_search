@@ -2,15 +2,16 @@ from __future__ import annotations
 
 import math
 
-SCORING_VERSION = "1"
+SCORING_VERSION = "2"
 SPEED_REF_MB_S = 10.0
 STABILITY_INSUFFICIENT_PENALTY = 0.9
+CF_ANYCAST_NEUTRAL_RISK = 30.0
 
 PROXY_CRITICAL_DIMS = ("latency_ms", "speed_mb_s")
 ENDPOINT_CRITICAL_DIMS = ("latency_ms", "speed_mb_s", "host_compatible")
 
 PROXY_DIMS = ("latency", "speed", "purity", "stability", "loss")
-ENDPOINT_DIMS = ("compatibility", "latency", "speed", "loss")
+ENDPOINT_DIMS = ("compatibility", "latency", "speed", "purity", "stability", "loss")
 
 
 def latency_score(latency_ms: float, max_latency_ms: float) -> float:
@@ -73,6 +74,7 @@ __all__ = [
     "SCORING_VERSION",
     "SPEED_REF_MB_S",
     "STABILITY_INSUFFICIENT_PENALTY",
+    "CF_ANYCAST_NEUTRAL_RISK",
     "PROXY_CRITICAL_DIMS",
     "ENDPOINT_CRITICAL_DIMS",
     "PROXY_DIMS",

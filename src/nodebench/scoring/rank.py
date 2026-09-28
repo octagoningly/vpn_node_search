@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import ipaddress
 import math
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime
 from typing import Any
 
@@ -19,7 +20,15 @@ from nodebench.core.schema import (
     ScoreIssue,
     ScoreReport,
 )
+from nodebench.intelligence.geo import (
+    DEFAULT_GEO_BASE_URL,
+    DEFAULT_TIMEOUT_S,
+    GeoLookupError,
+    GeoResult,
+    lookup_geo,
+)
 from nodebench.scoring.rules import (
+    CF_ANYCAST_NEUTRAL_RISK,
     SCORING_VERSION,
     SPEED_REF_MB_S,
     STABILITY_INSUFFICIENT_PENALTY,
@@ -41,6 +50,14 @@ MEASURED_FAILURE_STATUSES = frozenset(
 )
 MISSING_PROBE = "probe"
 MISSING_CODE = "missing_probe"
+MISSING_PURITY = "purity"
+MISSING_COUNTRY = "country"
+UNKNOWN_COUNTRY = "unknown"
+MAX_GEO_CACHE = 256
+
+# Signals that an address is a known Cloudflare Anycast / CF edge IP.
+_CF_ASN_MARKERS = ("13335", "cloudflare")
+_CF_PROVIDER_MARKERS = ("cloudflare", "cf anycast", "anycast")
 
 
 def _number(value: Any) -> float | None:
@@ -64,14 +81,121 @@ def _param_number(params: Mapping[str, Any], *names: str) -> float | None:
     return None
 
 
+def _country_code(raw: Any) -> str | None:
+    if isinstance(raw, str):
+        code = raw.strip().upper()
+        if len(code) == 2 and code.isalpha():
+            return code
+    return None
+
+
 def _param_country(params: Mapping[str, Any]) -> str | None:
     for name in ("country", "country_code"):
+        found = _country_code(params.get(name))
+        if found is not None:
+            return found
+    return _country_code(params.get("region"))
+
+
+def _region_country(region: Any) -> str | None:
+    return _country_code(region)
+
+
+def _is_ip(address: str) -> bool:
+    text = str(address or "").strip().strip("[]")
+    if not text:
+        return False
+    try:
+        ipaddress.ip_address(text)
+    except ValueError:
+        return False
+    return True
+
+
+def make_geo_lookup(
+    base_url: str = "",
+    timeout: float = DEFAULT_TIMEOUT_S,
+    *,
+    max_cache: int = MAX_GEO_CACHE,
+    lookup: Callable[[str, str, float], GeoResult] | None = None,
+) -> Callable[[str], GeoResult | None]:
+    """Bounded, cached GeoIP resolver used by scoring.
+
+    Only literal IPs are looked up. Failures and unconfigured base URLs
+    return ``None`` (unknown) and are cached so a flaky service is not
+    hammered. ``lookup`` is injectable for tests.
+    """
+    root = str(base_url or "").strip()
+    resolve = lookup or (
+        lambda ip, url, t: lookup_geo(ip, base_url=url, timeout=t)
+    )
+    cache: dict[str, GeoResult | None] = {}
+
+    def _lookup(address: str) -> GeoResult | None:
+        text = str(address or "").strip()
+        if not text or not _is_ip(text):
+            return None
+        if text in cache:
+            return cache[text]
+        if not root:
+            return None
+        if len(cache) >= max_cache:
+            # Drop oldest insertion to keep memory bounded.
+            cache.pop(next(iter(cache)), None)
+        try:
+            result = resolve(text, root, float(timeout))
+        except GeoLookupError:
+            result = None
+        cache[text] = result
+        return result
+
+    return _lookup
+
+
+def _looks_like_cf_anycast(
+    params: Mapping[str, Any], geo: GeoResult | None
+) -> bool:
+    """True when evidence shows this is a Cloudflare Anycast / CF edge IP.
+
+    A neutral risk is applied in that case -- never a fabricated pure score.
+    """
+    for name in ("asn", "as", "network", "isp", "org", "provider"):
         raw = params.get(name)
-        if isinstance(raw, str):
-            code = raw.strip().upper()
-            if len(code) == 2 and code.isalpha():
-                return code
-    return None
+        if not isinstance(raw, str):
+            continue
+        lowered = raw.lower()
+        if any(marker in lowered for marker in _CF_ASN_MARKERS):
+            return True
+    for name in ("anycast", "anycast_cf", "cloudflare", "cf_edge"):
+        raw = params.get(name)
+        if isinstance(raw, str) and raw.strip().lower() in {
+            "cf",
+            "cloudflare",
+            "true",
+            "1",
+            "yes",
+        }:
+            return True
+        if raw is True:
+            return True
+    if geo is not None:
+        for text in (geo.asn, geo.isp):
+            lowered = str(text or "").lower()
+            if any(marker in lowered for marker in _CF_ASN_MARKERS):
+                return True
+    return False
+
+
+def _resolve_risk(
+    params: Mapping[str, Any], geo: GeoResult | None
+) -> tuple[float | None, str]:
+    """Return (risk, source). Unknown stays None so purity is never faked."""
+    risk = _param_number(params, "risk")
+    if risk is not None:
+        return risk, "param"
+    if _looks_like_cf_anycast(params, geo):
+        return CF_ANYCAST_NEUTRAL_RISK, "cf_anycast_neutral"
+    return None, "unknown"
 
 
 def _missing_mode(config: ScoringConfig) -> str:
@@ -129,6 +253,37 @@ def _history_entry(
     )
 
 
+def _apply_purity_missing(
+    risk: float | None,
+    pending: list[str],
+    filters_failed: list[str],
+    config: ScoringConfig,
+) -> tuple[list[str], list[str]]:
+    """Unknown purity is incomplete data, never a free full score."""
+    if risk is not None:
+        return pending, filters_failed
+    if _missing_mode(config) == "exclude":
+        filters_failed.append(f"missing_{MISSING_PURITY}")
+        return [], filters_failed
+    pending.append(MISSING_PURITY)
+    return pending, filters_failed
+
+
+def _stability_dims(
+    summary: HistorySummary,
+    scoring: ScoringConfig,
+    notes: dict[str, Any],
+) -> float | None:
+    """History-backed stability: availability_rate gated by sample_count."""
+    if summary.sample_count < scoring.filters.stability_min_samples:
+        notes["stability_samples_insufficient"] = True
+        notes["stability_penalty"] = STABILITY_INSUFFICIENT_PENALTY
+        return None
+    if summary.availability_rate is None:
+        return None
+    return stability_score(summary.availability_rate)
+
+
 def _score_proxy(
     node: ProxyNode,
     result: ProxyProbeResult | None,
@@ -163,18 +318,22 @@ def _score_proxy(
             speed = float(result.speed_mb_s)
         elif result.speed_mbps is not None:
             speed = float(result.speed_mbps) / 8.0
-    risk = _param_number(node.params, "risk")
+    risk, risk_source = _resolve_risk(node.params, None)
     country = _param_country(node.params)
     if outcome == "ok":
         if scoring.filters.allowed_countries and (
             country is None or country not in scoring.filters.allowed_countries
         ):
-            filters_failed.append("country")
+            filters_failed.append(MISSING_COUNTRY)
         if risk is not None and risk > scoring.filters.max_risk:
             filters_failed.append("risk")
         if latency is not None and latency > scoring.filters.max_latency_ms:
             filters_failed.append("latency")
-        if speed is not None and speed < scoring.filters.min_speed_mb_s:
+        if (
+            scoring.filters.require_speed
+            and speed is not None
+            and speed < scoring.filters.min_speed_mb_s
+        ):
             filters_failed.append("speed")
     missing_values = {
         "latency_ms": latency,
@@ -188,6 +347,10 @@ def _score_proxy(
             pending = []
         else:
             pending = list(missing)
+    if outcome == "ok" and not filters_failed and not pending:
+        pending, filters_failed = _apply_purity_missing(
+            risk, pending, filters_failed, scoring
+        )
     summary = _history_entry(history, node.item_id, history_days)
     status = "ranked"
     if filters_failed:
@@ -198,6 +361,8 @@ def _score_proxy(
     score = 0.0
     breakdown: dict[str, float] = {}
     notes: dict[str, Any] = {}
+    if risk_source != "unknown":
+        notes["purity_source"] = risk_source
     if status == "ranked":
         loss = 100.0 * timeouts / attempts if attempts > 0 else None
         dims: dict[str, float | None] = {
@@ -206,15 +371,9 @@ def _score_proxy(
             else None,
             "speed": speed_score(speed, SPEED_REF_MB_S) if speed is not None else None,
             "purity": purity_score(risk) if risk is not None else None,
-            "stability": stability_score(summary.availability_rate)
-            if summary.availability_rate is not None
-            else None,
+            "stability": _stability_dims(summary, scoring, notes),
             "loss": loss_score(loss) if loss is not None else None,
         }
-        if summary.sample_count < scoring.filters.stability_min_samples:
-            dims["stability"] = None
-            notes["stability_samples_insufficient"] = True
-            notes["stability_penalty"] = STABILITY_INSUFFICIENT_PENALTY
         weights = {
             "latency": scoring.weights.latency,
             "speed": scoring.weights.speed,
@@ -264,6 +423,7 @@ def _score_endpoint(
     profile: str,
     scoring: ScoringConfig,
     history_days: int,
+    geo_lookup: Callable[[str], GeoResult | None] | None = None,
 ) -> RankedEndpoint:
     outcome, pending, filters_failed = _probe_gate(result, scoring)
     latency = speed = loss = None
@@ -272,6 +432,7 @@ def _score_endpoint(
     probe_status = "missing"
     probe_mode = "unknown"
     observed_at: datetime | None = None
+    result_region = ""
     if result is not None:
         probe_status = str(result.status.value)
         probe_mode = str(result.probe_mode.value)
@@ -281,13 +442,41 @@ def _score_endpoint(
         speed = float(result.speed_mb_s) if result.speed_mb_s is not None else None
         loss = float(result.loss_pct) if result.loss_pct is not None else None
         host_compatible = result.host_compatible
+        result_region = str(result.region or "")
+
+    country = _param_country(edge.params)
+    if country is None:
+        country = _region_country(result_region)
+    if country is None:
+        country = _region_country(edge.params.get("region"))
+
+    geo: GeoResult | None = None
+    if country is None and geo_lookup is not None and _is_ip(edge.address):
+        geo = geo_lookup(edge.address)
+        if geo is not None:
+            resolved = _country_code(geo.country_code)
+            if resolved is not None:
+                country = resolved
+
+    risk, risk_source = _resolve_risk(edge.params, geo)
+
     if outcome == "ok":
         if host_compatible is False:
             filters_failed.append("compatibility")
         if latency is not None and latency > scoring.filters.max_latency_ms:
             filters_failed.append("latency")
-        if speed is not None and speed < scoring.filters.min_speed_mb_s:
+        if (
+            scoring.filters.require_speed
+            and speed is not None
+            and speed < scoring.filters.min_speed_mb_s
+        ):
             filters_failed.append("speed")
+        if risk is not None and risk > scoring.filters.max_risk:
+            filters_failed.append("risk")
+        if scoring.filters.allowed_countries and (
+            country is None or country not in scoring.filters.allowed_countries
+        ):
+            filters_failed.append(MISSING_COUNTRY)
     missing_values = {
         "latency_ms": latency,
         "speed_mb_s": speed,
@@ -300,6 +489,10 @@ def _score_endpoint(
             pending = []
         else:
             pending = list(missing)
+    if outcome == "ok" and not filters_failed and not pending:
+        pending, filters_failed = _apply_purity_missing(
+            risk, pending, filters_failed, scoring
+        )
     summary = _history_entry(history, edge.item_id, history_days)
     status = "ranked"
     if filters_failed:
@@ -309,22 +502,31 @@ def _score_endpoint(
         status = "pending"
     score = 0.0
     breakdown: dict[str, float] = {}
+    notes: dict[str, Any] = {}
+    if risk_source != "unknown":
+        notes["purity_source"] = risk_source
     if status == "ranked":
-        dims = {
+        dims: dict[str, float | None] = {
             "compatibility": 1.0 if host_compatible is True else None,
             "latency": latency_score(latency, scoring.filters.max_latency_ms)
             if latency is not None
             else None,
             "speed": speed_score(speed, SPEED_REF_MB_S) if speed is not None else None,
+            "purity": purity_score(risk) if risk is not None else None,
+            "stability": _stability_dims(summary, scoring, notes),
             "loss": loss_score(loss) if loss is not None else None,
         }
         weights = {
             "compatibility": scoring.cf_weights.compatibility,
             "latency": scoring.cf_weights.latency,
             "speed": scoring.cf_weights.speed,
+            "purity": scoring.cf_weights.purity,
+            "stability": scoring.cf_weights.stability,
             "loss": scoring.cf_weights.loss,
         }
         score, breakdown = weighted_score(weights, dims)
+        if notes.get("stability_samples_insufficient"):
+            score = max(0.0, score * STABILITY_INSUFFICIENT_PENALTY)
     return RankedEndpoint(
         item_id=edge.item_id,
         status=status,
@@ -333,6 +535,7 @@ def _score_endpoint(
         score_breakdown=breakdown,
         pending=pending,
         filters_failed=filters_failed,
+        notes=notes,
         scoring_version=SCORING_VERSION,
         rule_snapshot={},
         runner_id=runner_id,
@@ -345,6 +548,8 @@ def _score_endpoint(
         speed_mb_s=speed,
         speed_unit=speed_unit,
         loss_pct=loss,
+        risk=risk,
+        country_code=country,
         address=edge.address,
         port=edge.port,
         target_host=edge.target_host,
@@ -381,8 +586,15 @@ def score_run(
     scoring: ScoringConfig,
     history_days: int,
     generated_at: datetime | None = None,
+    geo_lookup: Callable[[str], GeoResult | None] | None = None,
 ) -> ScoreReport:
-    """Score and rank every entity against probe data, history and filters."""
+    """Score and rank every entity against probe data, history and filters.
+
+    ``geo_lookup`` resolves literal endpoint addresses to GeoIP data
+    (country / ASN) when CFST region codes are unavailable. Pass
+    :func:`make_geo_lookup` for a bounded cached resolver, or ``None``
+    to stay offline.
+    """
     results: dict[str, Any] = {}
     issues: list[ScoreIssue] = []
     entity_ids = {node.item_id for node in nodes} | {edge.item_id for edge in edges}
@@ -429,6 +641,7 @@ def score_run(
             profile=profile,
             scoring=scoring,
             history_days=history_days,
+            geo_lookup=geo_lookup,
         )
         for edge in edges
     ]
@@ -449,6 +662,7 @@ def score_run(
         "scoring_version": SCORING_VERSION,
         "speed_ref_mb_s": SPEED_REF_MB_S,
         "stability_penalty": STABILITY_INSUFFICIENT_PENALTY,
+        "cf_anycast_neutral_risk": CF_ANYCAST_NEUTRAL_RISK,
         "history_days": int(history_days),
         "weights": {
             "latency": scoring.weights.latency,
@@ -461,6 +675,8 @@ def score_run(
             "compatibility": scoring.cf_weights.compatibility,
             "latency": scoring.cf_weights.latency,
             "speed": scoring.cf_weights.speed,
+            "purity": scoring.cf_weights.purity,
+            "stability": scoring.cf_weights.stability,
             "loss": scoring.cf_weights.loss,
         },
         "filters": scoring.filters.model_dump(mode="json"),
@@ -494,5 +710,6 @@ def score_run(
 
 
 __all__ = [
+    "make_geo_lookup",
     "score_run",
 ]

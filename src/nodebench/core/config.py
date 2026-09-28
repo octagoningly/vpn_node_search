@@ -280,6 +280,7 @@ class ScoringFilters(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     require_real_probe_success: bool = True
+    require_speed: bool = True
     max_latency_ms: float = 800.0
     min_speed_mb_s: float = 0.5
     max_risk: float = 50.0
@@ -335,12 +336,14 @@ class ScoringFilters(BaseModel):
 class ScoringCfWeights(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    compatibility: float = 0.35
-    latency: float = 0.25
-    speed: float = 0.25
-    loss: float = 0.15
+    compatibility: float = 0.25
+    latency: float = 0.17
+    speed: float = 0.17
+    loss: float = 0.11
+    purity: float = 0.15
+    stability: float = 0.15
 
-    @field_validator("compatibility", "latency", "speed", "loss")
+    @field_validator("compatibility", "latency", "speed", "loss", "purity", "stability")
     @classmethod
     def _non_negative_weight(cls, value: float) -> float:
         number = float(value)
@@ -350,7 +353,14 @@ class ScoringCfWeights(BaseModel):
 
     @model_validator(mode="after")
     def _weight_sum_positive(self) -> "ScoringCfWeights":
-        total = self.compatibility + self.latency + self.speed + self.loss
+        total = (
+            self.compatibility
+            + self.latency
+            + self.speed
+            + self.loss
+            + self.purity
+            + self.stability
+        )
         if total <= 0:
             raise ValueError("at least one cf scoring weight must be positive")
         return self
