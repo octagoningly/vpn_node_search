@@ -33,7 +33,13 @@ from nodebench.exporters import (
     scan_files,
     scan_text,
 )
-from nodebench.exporters.cf_addapi import CF_ADDAPI_NAME, build_addapi
+from nodebench.exporters.cf_addapi import (
+    CF_ADDAPI_NAME,
+    DEFAULT_ADDAPI_REMARK_TEMPLATE,
+    addapi_remark_from_ranked,
+    build_addapi,
+    format_addapi_remark,
+)
 from nodebench.exporters.cf_addcsv import CF_ADDCSV_NAME, build_addcsv
 from nodebench.exporters.clash import PROXY_CLASH_NAME
 from nodebench.exporters.raw import PROXY_RAW_NAME
@@ -489,6 +495,140 @@ def test_build_addapi_lines_match_documented_pattern():
 
 def test_build_addapi_empty_rows():
     assert build_addapi([]) == ""
+
+
+# --- ADDAPI score-summary remark (v2rayN) ---------------------------------
+
+
+def test_format_addapi_remark_default_template_matches_v2rayn_sample():
+    remark = format_addapi_remark(
+        speed_mb_s=4.6, purity=0.85, stability=0.72, country_code="SG"
+    )
+    assert remark == "4.6-0.85-0.72-SG"
+    remark = format_addapi_remark(
+        speed_mb_s=3.8, purity=0.80, stability=0.65, country_code="JP"
+    )
+    assert remark == "3.8-0.80-0.65-JP"
+
+
+def test_format_addapi_remark_placeholder_template_is_customizable():
+    remark = format_addapi_remark(
+        speed_mb_s=4.6,
+        purity=0.85,
+        stability=0.72,
+        country_code="SG",
+        template="{country}:{speed}/{purity}/{stability}",
+    )
+    assert remark == "SG:4.6/0.85/0.72"
+    remark = format_addapi_remark(
+        speed_mb_s=4.6,
+        purity=0.85,
+        stability=0.72,
+        country_code="SG",
+        template="{speed}-{purity}-{country}",
+    )
+    assert remark == "4.6-0.85-SG"
+
+
+def test_format_addapi_remark_missing_scores_use_dashes_and_unknown_country():
+    remark = format_addapi_remark(speed_mb_s=8.0)
+    assert remark == "8.0-------??"
+    assert remark.startswith("8.0-")
+    assert "--" in remark
+    assert remark.endswith("??")
+    # bare default template is the documented default
+    assert DEFAULT_ADDAPI_REMARK_TEMPLATE == "speed-purity-stability-country"
+
+
+def test_format_addapi_remark_normalizes_0_100_scores_to_0_1():
+    remark = format_addapi_remark(
+        speed_mb_s=11.59,
+        purity=85.0,
+        stability=72.0,
+        country_code="jp",
+    )
+    assert remark == "11.6-0.85-0.72-JP"
+
+
+def test_format_addapi_remark_speed_keeps_one_decimal():
+    assert format_addapi_remark(speed_mb_s=11.59, purity=1, stability=1, country_code="US") == (
+        "11.6-1.00-1.00-US"
+    )
+    assert format_addapi_remark(speed_mb_s=0.05, purity=0, stability=0, country_code="") == (
+        "0.1-0.00-0.00-??"
+    )
+
+
+def test_addapi_remark_from_ranked_uses_score_breakdown_then_risk_and_availability():
+    ranked = make_ranked_endpoint(
+        speed_mb_s=4.6,
+        score_breakdown={"purity": 0.85, "stability": 0.72},
+        country_code="SG",
+        availability_rate=0.99,
+    )
+    assert addapi_remark_from_ranked(ranked) == "4.6-0.85-0.72-SG"
+
+    ranked = make_ranked_endpoint(
+        speed_mb_s=3.8,
+        risk=20.0,
+        availability_rate=0.65,
+        country_code="JP",
+    )
+    assert addapi_remark_from_ranked(ranked) == "3.8-0.80-0.65-JP"
+
+    ranked = make_ranked_endpoint(speed_mb_s=8.0)
+    assert addapi_remark_from_ranked(ranked) == "8.0-------??"
+
+    ranked = make_ranked_endpoint(speed_mb_s=8.0)
+    assert addapi_remark_from_ranked(ranked, fallback="edge-a") == "8.0-------??"
+    ranked = make_ranked_endpoint(speed_mb_s=8.0)
+    assert addapi_remark_from_ranked(ranked, template="", fallback="edge-a") == "edge-a"
+
+
+def test_build_export_addapi_lines_carry_score_summary_remark(tmp_path: Path):
+    out = tmp_path / "export"
+    outcome = build_export(
+        out,
+        make_report(),
+        nodes=[],
+        edges=[make_edge(address="104.17.29.227", port=8443)],
+        proxies=[],
+        endpoints=[
+            make_ranked_endpoint(
+                address="104.17.29.227",
+                port=8443,
+                speed_mb_s=4.6,
+                score_breakdown={"purity": 0.85, "stability": 0.72},
+                country_code="SG",
+            )
+        ],
+        scoring_version="1",
+    )
+    assert outcome.status == "ok"
+    text = (out / CF_ADDAPI_NAME).read_text(encoding="utf-8")
+    assert text.splitlines() == ["104.17.29.227:8443#4.6-0.85-0.72-SG"]
+
+
+def test_build_export_addapi_remark_template_is_configurable(tmp_path: Path):
+    out = tmp_path / "export"
+    build_export(
+        out,
+        make_report(),
+        nodes=[],
+        edges=[make_edge()],
+        proxies=[],
+        endpoints=[
+            make_ranked_endpoint(
+                speed_mb_s=4.6,
+                score_breakdown={"purity": 0.85, "stability": 0.72},
+                country_code="SG",
+            )
+        ],
+        scoring_version="1",
+        addapi_remark_template="{country}-{speed}",
+    )
+    text = (out / CF_ADDAPI_NAME).read_text(encoding="utf-8")
+    assert text.splitlines() == ["198.51.100.7:443#SG-4.6"]
 
 
 def test_build_addcsv_writes_full_header_and_formats():

@@ -16,7 +16,12 @@ from nodebench.core.schema import (
     ValidationReport,
 )
 from nodebench.core.serialization import dumps_json, public_dump, write_json_atomic
-from nodebench.exporters.cf_addapi import CF_ADDAPI_NAME, build_addapi
+from nodebench.exporters.cf_addapi import (
+    CF_ADDAPI_NAME,
+    DEFAULT_ADDAPI_REMARK_TEMPLATE,
+    addapi_remark_from_ranked,
+    build_addapi,
+)
 from nodebench.exporters.cf_addcsv import CF_ADDCSV_NAME, build_addcsv
 from nodebench.exporters.consumer_hints import build_consumer_hints
 from nodebench.exporters.clash import PROXY_CLASH_NAME, build_clash_config, build_clash_proxy
@@ -116,6 +121,7 @@ def build_export(
     region_by_item: Mapping[str, str] | None = None,
     cf_candidates_authorized: bool = False,
     dls_min_speed_mb_s: float | None = None,
+    addapi_remark_template: str | None = None,
 ) -> ExportOutcome:
     """Write the private export directory for one run and describe it.
 
@@ -169,8 +175,18 @@ def build_export(
     api_rows: list[tuple[str, int, str]] = []
     csv_rows: list[list[Any]] = []
     measured_endpoints = 0
+    remark_template = (
+        addapi_remark_template
+        if addapi_remark_template is not None
+        else DEFAULT_ADDAPI_REMARK_TEMPLATE
+    )
     for edge, ranked in edge_rows:
-        remark = str(edge.remarks or "") or str(regions.get(edge.item_id, "") or "")
+        fallback_remark = str(edge.remarks or "") or str(regions.get(edge.item_id, "") or "")
+        remark = addapi_remark_from_ranked(
+            ranked,
+            template=remark_template,
+            fallback=fallback_remark,
+        )
         api_rows.append((edge.address, int(edge.port), remark))
         params = edge.params or {}
         origin_port = params.get("origin_port", "")
@@ -234,6 +250,7 @@ def build_export(
         dls_min_speed_mb_s=dls_min_speed_mb_s,
         endpoint_count=len(edge_rows),
         measured_endpoint_count=measured_endpoints,
+        addapi_remark_template=remark_template,
     )
 
     stages["export"] = stage_view(

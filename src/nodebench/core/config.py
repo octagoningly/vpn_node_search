@@ -475,6 +475,8 @@ class AppConfig(BaseModel):
     scheduler: SchedulerConfig = Field(default_factory=SchedulerConfig)
     budget: dict[str, float] = Field(default_factory=dict)
     output_dir: str = "output"
+    # v2rayN-visible ADDAPI remark: speed-purity-stability-country
+    addapi_remark_template: str = "speed-purity-stability-country"
     secrets: dict[str, str] = Field(default_factory=dict, repr=False)
 
 

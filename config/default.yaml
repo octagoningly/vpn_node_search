@@ -106,3 +106,4 @@ scheduler:
   default_time: "04:37"
 budget: {}
 output_dir: output
+addapi_remark_template: speed-purity-stability-country

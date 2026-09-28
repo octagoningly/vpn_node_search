@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
-from nodebench.exporters.cf_addapi import CF_ADDAPI_NAME
+from nodebench.exporters.cf_addapi import (
+    CF_ADDAPI_NAME,
+    DEFAULT_ADDAPI_REMARK_TEMPLATE,
+)
 from nodebench.exporters.cf_addcsv import CF_ADDCSV_NAME
 
 # WorkerVless2sub / edgetunnel consumer notes. Endpoints alone cannot form a
@@ -10,7 +13,10 @@ from nodebench.exporters.cf_addcsv import CF_ADDCSV_NAME
 # Path/SNI. This project never fabricates a subscription from edge addresses.
 USER_REQUIRED_SUBSCRIPTION_FIELDS = ("host", "uuid", "path", "sni")
 
-ADDAPI_LINE_HELP = "one endpoint per line: HOST:PORT#remark or [IPv6]:PORT#remark"
+ADDAPI_LINE_HELP = (
+    "one endpoint per line: HOST:PORT#speed-purity-stability-country or "
+    "[IPv6]:PORT#speed-purity-stability-country"
+)
 ADDCSV_COLUMN_HELP = (
     "iptest-style nine columns in fixed order: "
     "IP地址,端口,回源端口,TLS,数据中心,地区,城市,TCP延迟(ms),速度(MB/s)"
@@ -27,12 +33,14 @@ def build_consumer_hints(
     dls_min_speed_mb_s: float | None = None,
     endpoint_count: int = 0,
     measured_endpoint_count: int = 0,
+    addapi_remark_template: str | None = None,
 ) -> dict[str, Any]:
     """Describe how to feed the exported files to WorkerVless2sub.
 
     The hints deliberately contain no credentials and no ready-made
     subscription URL: Host/UUID/Path/SNI stay operator-supplied.
     """
+    template = addapi_remark_template or DEFAULT_ADDAPI_REMARK_TEMPLATE
     dls: dict[str, Any] = {
         "field": "速度(MB/s)",
         "unit": "MB/s",
@@ -49,6 +57,8 @@ def build_consumer_hints(
                 "relative_to": "export directory",
                 "env": "ADDAPI",
                 "format": ADDAPI_LINE_HELP,
+                "remark_template": template,
+                "remark_example": "104.17.29.227:8443#4.6-0.85-0.72-SG",
             },
             "addcsv": {
                 "path": CF_ADDCSV_NAME,
@@ -56,6 +66,17 @@ def build_consumer_hints(
                 "env": "ADDCSV",
                 "format": ADDCSV_COLUMN_HELP,
             },
+        },
+        "addapi_remark": {
+            "template": template,
+            "separator": "-",
+            "fields": {
+                "speed": "download speed in MB/s, one decimal (unit not written in the remark)",
+                "purity": "0-1 score, two decimals; -- when unknown",
+                "stability": "0-1 score, two decimals; -- when unknown",
+                "country": "ISO two-letter code; ?? when unknown",
+            },
+            "speed_unit": "MB/s",
         },
         "dls": dls,
         "subscription": {

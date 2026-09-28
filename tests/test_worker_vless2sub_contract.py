@@ -15,7 +15,11 @@ from __future__ import annotations
 import re
 
 from nodebench.core.schema import EdgeEndpoint, RankedEndpoint
-from nodebench.exporters.cf_addapi import build_addapi
+from nodebench.exporters.cf_addapi import (
+    DEFAULT_ADDAPI_REMARK_TEMPLATE,
+    build_addapi,
+    format_addapi_remark,
+)
 from nodebench.exporters.cf_addcsv import build_addcsv
 from nodebench.exporters.consumer_hints import build_consumer_hints
 from nodebench.parsers.csv import (
@@ -149,6 +153,63 @@ def test_addapi_lines_parse_back_with_remarks_and_ports():
 def test_addapi_ipv6_bracket_form_is_required_in_export():
     text = build_addapi([("2001:db8::7", 8443, "v6")])
     assert text.splitlines() == ["[2001:db8::7]:8443#v6"]
+
+
+def test_addapi_score_summary_remark_matches_line_pattern_and_parses_back():
+    """#speed-purity-stability-country is a legal ADDAPI alias for v2rayN."""
+    remarks = [
+        format_addapi_remark(
+            speed_mb_s=4.6, purity=0.85, stability=0.72, country_code="SG"
+        ),
+        format_addapi_remark(
+            speed_mb_s=3.8, purity=0.80, stability=0.65, country_code="JP"
+        ),
+    ]
+    assert remarks == ["4.6-0.85-0.72-SG", "3.8-0.80-0.65-JP"]
+    text = build_addapi(
+        [
+            ("104.17.29.227", 8443, remarks[0]),
+            ("139.162.41.109", 443, remarks[1]),
+            ("2001:db8::7", 80, format_addapi_remark(speed_mb_s=1.0)),
+        ]
+    )
+    lines = text.splitlines()
+    assert lines[0] == "104.17.29.227:8443#4.6-0.85-0.72-SG"
+    assert lines[1] == "139.162.41.109:443#3.8-0.80-0.65-JP"
+    assert lines[2] == "[2001:db8::7]:80#1.0-------??"
+    for line in lines:
+        match = ADDAPI_LINE_PATTERN.match(line)
+        assert match is not None, line
+        assert match.group("remark")
+
+    endpoints, issues = parse_endpoint_lines("\n".join(lines) + "\n", SRC)
+    assert issues == []
+    assert endpoints[0].remarks == "4.6-0.85-0.72-SG"
+    assert endpoints[1].remarks == "3.8-0.80-0.65-JP"
+
+
+def test_addapi_score_summary_placeholder_template_and_unknowns():
+    assert (
+        DEFAULT_ADDAPI_REMARK_TEMPLATE
+        == "speed-purity-stability-country"
+    )
+    assert (
+        format_addapi_remark(
+            speed_mb_s=4.6,
+            purity=0.85,
+            stability=0.72,
+            country_code="SG",
+            template="{speed}-{purity}-{stability}-{country}",
+        )
+        == "4.6-0.85-0.72-SG"
+    )
+    assert format_addapi_remark(speed_mb_s=2.0) == "2.0-------??"
+    assert (
+        format_addapi_remark(
+            speed_mb_s=2.0, purity=0.5, stability=None, country_code=None
+        )
+        == "2.0-0.50----??"
+    )
 
 
 def test_consumer_hints_cover_adddapi_addcsv_dls_and_user_fields():

@@ -244,6 +244,7 @@ def run_export_stage(
         scoring_version=SCORING_VERSION,
         cf_candidates_authorized=bool(config.publish.cf_candidates_authorized),
         dls_min_speed_mb_s=float(config.scoring.filters.min_speed_mb_s),
+        addapi_remark_template=config.addapi_remark_template,
     )
 
 
@@ -520,6 +521,7 @@ def export_artifacts(config: AppConfig, run_id: str) -> ExportOutcome:
         scoring_version=SCORING_VERSION,
         cf_candidates_authorized=bool(config.publish.cf_candidates_authorized),
         dls_min_speed_mb_s=float(config.scoring.filters.min_speed_mb_s),
+        addapi_remark_template=config.addapi_remark_template,
     )
 
 
