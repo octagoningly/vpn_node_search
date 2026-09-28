@@ -32,7 +32,7 @@ probe:
     max_nodes: 100
     max_download_mb_each: 5
     speedtest_url: ""
-    mihomo_path: ""
+    mihomo_path: tools/mihomo/mihomo.exe
     api_timeout_s: 10
     per_node_timeout_s: 20
     total_deadline_s: 300
@@ -42,7 +42,7 @@ probe:
     max_download_nodes: 20
     target_host: octagoningly-vpn.pages.dev
     speedtest_url: ""
-    cfst_path: ""
+    cfst_path: tools/cfst/CloudflareSpeedTest.exe
     tcp_timeout_s: 5
     tls_timeout_s: 5
     http_timeout_s: 5

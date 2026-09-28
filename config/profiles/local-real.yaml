@@ -1,0 +1,28 @@
+profile: local-real
+runner_id: local:desktop-a
+sources:
+  local:
+    enabled: true
+    paths:
+      - input/
+  cf:
+    enabled: true
+    candidate_files:
+      - input/cf-candidates.txt
+    max_ips_per_run: 50
+probe:
+  proxy:
+    enabled: true
+    mihomo_path: tools/mihomo/mihomo.exe
+    speedtest_url: https://speed.cloudflare.com/__down?bytes=5000000
+    max_nodes: 20
+    max_download_mb_each: 1
+    per_node_timeout_s: 15
+    total_deadline_s: 180
+  cf:
+    enabled: true
+    cfst_path: tools/cfst/CloudflareSpeedTest.exe
+    target_host: octagoningly-vpn.pages.dev
+    speedtest_url: https://speed.cloudflare.com/__down?bytes=5000000
+    max_download_nodes: 5
+    total_deadline_s: 180
