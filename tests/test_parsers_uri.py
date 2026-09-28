@@ -342,3 +342,73 @@ def test_missing_server_reported():
     assert node is None
     assert issue is not None
     assert issue.code == "missing_server"
+
+
+def test_hysteria2_obfs_sni_normalized():
+    line = (
+        "hysteria2://sample-password@192.0.2.30:443"
+        "?obfs=salamander&obfs-password=sample-obfs&sni=edge.example.test"
+        "&insecure=1#hy2-node"
+    )
+    node, issue = parse_uri(line, SRC)
+    assert issue is None
+    assert node.protocol == "hysteria2"
+    assert node.params["obfs"] == "salamander"
+    assert node.params["sni"] == "edge.example.test"
+    assert node.params["insecure"] is True
+    assert node.secrets == {
+        "password": "sample-password",
+        "obfs_password": "sample-obfs",
+    }
+    assert "obfs-password" not in node.params
+    assert "obfs_password" not in node.params
+
+
+def test_hysteria2_insecure_false_folded():
+    line = (
+        "hysteria2://sample-password@192.0.2.31:443"
+        "?obfs=salamander&allow_insecure=0#r"
+    )
+    node, issue = parse_uri(line, SRC)
+    assert issue is None
+    assert node.params == {"obfs": "salamander"}
+    assert "insecure" not in node.params
+
+
+def test_tuic_congestion_and_udp_relay_normalized():
+    line = (
+        "tuic://123e4567-e89b-12d3-a456-426614174000:sample-password"
+        "@203.0.113.12:443?congestion_control=bbr&udp_relay_mode=native"
+        "&alpn=h3&sni=fast.example.test&allow_insecure=1#tuic-node"
+    )
+    node, issue = parse_uri(line, SRC)
+    assert issue is None
+    assert node.params["congestion_control"] == "bbr"
+    assert node.params["udp_relay_mode"] == "native"
+    assert node.params["alpn"] == "h3"
+    assert node.params["sni"] == "fast.example.test"
+    assert node.params["insecure"] is True
+    assert node.secrets["uuid"] == VLESS_UUID
+
+
+def test_tuic_congestion_alias_cc():
+    line = (
+        "tuic://123e4567-e89b-12d3-a456-426614174000:sample-password"
+        "@203.0.113.13:443?cc=cubic&urm=native#r"
+    )
+    node, issue = parse_uri(line, SRC)
+    assert issue is None
+    assert node.params["congestion_control"] == "cubic"
+    assert node.params["udp_relay_mode"] == "native"
+
+
+def test_unsupported_reason_is_stable_and_redacted():
+    line = "socks5://user:secret-password@192.0.2.40:1080#r"
+    first, first_issue = parse_uri(line, SRC)
+    second, second_issue = parse_uri(line, SRC)
+    assert first is None and second is None
+    assert first_issue.code == second_issue.code == "unsupported_protocol"
+    assert first_issue.message_redacted == second_issue.message_redacted
+    assert first_issue.raw_ref == second_issue.raw_ref == "<socks5>://…"
+    assert "secret-password" not in first_issue.message_redacted
+    assert "192.0.2.40" not in first_issue.raw_ref

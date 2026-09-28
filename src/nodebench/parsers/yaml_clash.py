@@ -58,9 +58,14 @@ _KNOWN_KEYS = frozenset(
         "fingerprint",
         "obfs",
         "obfs-param",
+        "obfs-password",
         "peer",
         "up",
         "down",
+        "congestion-controller",
+        "congestion_control",
+        "udp-relay-mode",
+        "udp_relay_mode",
     }
 )
 
@@ -103,6 +108,11 @@ def _collect_creds(entry, protocol):
         text = str(value)
         if text.strip():
             secrets[key] = text
+    obfs_password = entry.get("obfs-password")
+    if obfs_password is None:
+        obfs_password = entry.get("obfs_password")
+    if obfs_password is not None and str(obfs_password).strip():
+        secrets["obfs_password"] = str(obfs_password)
     if protocol in ("vless", "vmess"):
         missing = not secrets.get("uuid")
     elif protocol in ("trojan", "ss"):
@@ -179,7 +189,12 @@ def _opts_params(entry, params):
         params["client-fingerprint"] = str(fingerprint)
     reality_opts = entry.get("reality-opts")
     if isinstance(reality_opts, dict) and reality_opts:
-        params["reality-opts"] = reality_opts
+        public_key = reality_opts.get("public-key") or reality_opts.get("publicKey")
+        short_id = reality_opts.get("short-id") or reality_opts.get("shortId")
+        if public_key is not None and str(public_key).strip():
+            params["reality_public_key"] = str(public_key)
+        if short_id is not None and str(short_id).strip():
+            params["reality_short_id"] = str(short_id)
     alter_id = entry.get("alterId")
     if alter_id is None:
         alter_id = entry.get("alterid")
@@ -194,6 +209,31 @@ def _opts_params(entry, params):
     sni = entry.get("sni") or entry.get("servername") or entry.get("peer")
     if sni:
         params["sni"] = str(sni)
+    obfs = entry.get("obfs")
+    if obfs is not None and str(obfs).strip():
+        params["obfs"] = str(obfs)
+    obfs_param = entry.get("obfs-param") or entry.get("obfs_param")
+    if obfs_param is not None and str(obfs_param).strip():
+        params["obfs_param"] = str(obfs_param)
+    congestion = (
+        entry.get("congestion-controller")
+        or entry.get("congestion_control")
+        or entry.get("congestion")
+    )
+    if congestion is not None and str(congestion).strip():
+        params["congestion_control"] = str(congestion)
+    udp_relay = entry.get("udp-relay-mode") or entry.get("udp_relay_mode")
+    if udp_relay is not None and str(udp_relay).strip():
+        params["udp_relay_mode"] = str(udp_relay)
+    skip_verify = entry.get("skip-cert-verify")
+    if skip_verify is None:
+        skip_verify = entry.get("allow_insecure")
+    if skip_verify is not None:
+        if isinstance(skip_verify, str):
+            text = skip_verify.strip().lower()
+            params["insecure"] = text in ("1", "true", "yes", "on")
+        else:
+            params["insecure"] = bool(skip_verify)
     return params
 
 

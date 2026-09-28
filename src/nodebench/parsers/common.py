@@ -113,6 +113,11 @@ def fold_defaults(params):
         elif key == "alter_id":
             if value in (0, "0", ""):
                 drop.append(key)
+        elif key == "insecure":
+            # Default is certificate verification; explicit false is folded away
+            # so the same node from different sources shares one fingerprint.
+            if value is False or value in (0, "0", "false", ""):
+                drop.append(key)
     for key in drop:
         params.pop(key, None)
     return params

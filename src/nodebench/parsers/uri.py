@@ -26,7 +26,7 @@ SUPPORTED_SCHEMES = frozenset({"vless", "vmess", "trojan", "ss", "hysteria2", "t
 
 _SCHEME_RE = re.compile(r"[A-Za-z][A-Za-z0-9+.\-]*")
 
-_CREDENTIAL_KEYS = ("token", "auth", "password", "uuid")
+_CREDENTIAL_KEYS = ("token", "auth", "password", "uuid", "obfs-password", "obfs_password")
 _TRANSPORT_KEYS = ("type", "net", "network")
 _SECURITY_KEYS = ("security", "tls")
 
@@ -46,7 +46,27 @@ _PARAM_RENAMES = {
     "alpn": "alpn",
     "flow": "flow",
     "headertype": "headerType",
+    # Hysteria2 / TUIC field normalization (开发规则 §3.3).
+    "obfs": "obfs",
+    "obfs-password": "obfs_password",
+    "obfs_password": "obfs_password",
+    "obfs-param": "obfs_param",
+    "congestion_control": "congestion_control",
+    "congestion-controller": "congestion_control",
+    "congestion": "congestion_control",
+    "cc": "congestion_control",
+    "udp_relay_mode": "udp_relay_mode",
+    "udp-relay-mode": "udp_relay_mode",
+    "urm": "udp_relay_mode",
+    "insecure": "insecure",
+    "allow_insecure": "insecure",
+    "allow-insecure": "insecure",
+    "skip-cert-verify": "insecure",
+    "skip_cert_verify": "insecure",
 }
+
+_BOOL_TRUE = {"1", "true", "yes", "on"}
+_BOOL_FALSE = {"0", "false", "no", "off", ""}
 
 
 def _split_fragment(text):
@@ -90,6 +110,8 @@ def _pop_secrets(query):
         lowered = key.lower()
         if lowered in _CREDENTIAL_KEYS:
             secrets[lowered] = query.pop(key)
+    if "obfs-password" in secrets:
+        secrets["obfs_password"] = secrets.pop("obfs-password")
     return secrets
 
 
@@ -111,6 +133,15 @@ def _promote(query):
     return transport_value, security_value
 
 
+def _coerce_bool(value):
+    text = str(value).strip().lower()
+    if text in _BOOL_TRUE:
+        return True
+    if text in _BOOL_FALSE:
+        return False
+    return value
+
+
 def _rename_params(query):
     params = {}
     for key, value in query.items():
@@ -120,6 +151,8 @@ def _rename_params(query):
                 params[target] = int(str(value).strip())
             except ValueError:
                 params[target] = value
+        elif target == "insecure":
+            params[target] = _coerce_bool(value)
         else:
             params[target] = value
     return params

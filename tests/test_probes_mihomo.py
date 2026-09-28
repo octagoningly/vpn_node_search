@@ -177,6 +177,24 @@ def test_to_mihomo_proxy_reality_and_plaintext():
     assert "uuid" not in plain
 
 
+def test_to_mihomo_proxy_reads_normalized_reality_params():
+    """URI/YAML parsers normalize reality keys; the prober must still emit them."""
+    reality = to_mihomo_proxy(
+        sample_target(
+            security="reality",
+            params={
+                "uuid": UUID,
+                "reality_public_key": "sample-public-key",
+                "reality_short_id": "abcd1234",
+            },
+        )
+    )
+    assert reality["reality-opts"] == {
+        "public-key": "sample-public-key",
+        "short-id": "abcd1234",
+    }
+
+
 def test_build_mihomo_config_shape():
     config = build_mihomo_config(sample_target(), mixed_port=18080, api_port=19090)
     assert config["mixed-port"] == 18080

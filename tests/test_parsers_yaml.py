@@ -171,7 +171,9 @@ def test_reality_options_promoted():
     proxies, issues = parse_clash_yaml(dump(document), SRC)
     assert issues == []
     assert proxies[0].security == "reality"
-    assert proxies[0].params["reality-opts"]["public-key"] == "sample-public-key"
+    assert proxies[0].params["reality_public_key"] == "sample-public-key"
+    assert proxies[0].params["reality_short_id"] == "0123456789abcdef"
+    assert "reality-opts" not in proxies[0].params
     assert proxies[0].remarks == ""
 
 
@@ -249,3 +251,105 @@ def test_unknown_top_level_keys_kept_in_params():
     proxies, issues = parse_clash_yaml(text, SRC)
     assert issues == []
     assert proxies[0].params["custom-flag"] == "sample-value"
+
+
+def test_hysteria2_fields_normalized():
+    document = {
+        "proxies": [
+            {
+                "type": "hysteria2",
+                "server": "192.0.2.30",
+                "port": 443,
+                "password": "sample-password",
+                "obfs": "salamander",
+                "obfs-password": "sample-obfs",
+                "sni": "edge.example.test",
+                "skip-cert-verify": True,
+            }
+        ]
+    }
+    proxies, issues = parse_clash_yaml(dump(document), SRC)
+    assert issues == []
+    node = proxies[0]
+    assert node.protocol == "hysteria2"
+    assert node.transport == "udp"
+    assert node.security == "tls"
+    assert node.params["obfs"] == "salamander"
+    assert node.params["sni"] == "edge.example.test"
+    assert node.params["insecure"] is True
+    assert node.secrets == {
+        "password": "sample-password",
+        "obfs_password": "sample-obfs",
+    }
+    assert "obfs-password" not in node.params
+
+
+def test_hysteria2_skip_cert_verify_false_folded():
+    document = {
+        "proxies": [
+            {
+                "type": "hy2",
+                "server": "192.0.2.31",
+                "port": 443,
+                "password": "sample-password",
+                "skip-cert-verify": False,
+            }
+        ]
+    }
+    proxies, issues = parse_clash_yaml(dump(document), SRC)
+    assert issues == []
+    assert proxies[0].protocol == "hysteria2"
+    assert "insecure" not in proxies[0].params
+
+
+def test_tuic_fields_normalized():
+    document = {
+        "proxies": [
+            {
+                "type": "tuic",
+                "server": "203.0.113.12",
+                "port": 443,
+                "uuid": VLESS_UUID,
+                "password": "sample-password",
+                "congestion-controller": "bbr",
+                "udp-relay-mode": "native",
+                "alpn": ["h3"],
+                "sni": "fast.example.test",
+            }
+        ]
+    }
+    proxies, issues = parse_clash_yaml(dump(document), SRC)
+    assert issues == []
+    node = proxies[0]
+    assert node.protocol == "tuic"
+    assert node.transport == "udp"
+    assert node.params["congestion_control"] == "bbr"
+    assert node.params["udp_relay_mode"] == "native"
+    assert node.params["alpn"] == "h3"
+    assert node.params["sni"] == "fast.example.test"
+    assert node.secrets == {"uuid": VLESS_UUID, "password": "sample-password"}
+
+
+def test_unsupported_protocol_reason_is_stable():
+    document = {
+        "proxies": [
+            {
+                "type": "mystery",
+                "server": "192.0.2.40",
+                "port": 443,
+                "password": "sample-password",
+            }
+        ]
+    }
+    first_proxies, first_issues = parse_clash_yaml(dump(document), SRC)
+    second_proxies, second_issues = parse_clash_yaml(dump(document), SRC)
+    assert first_proxies == second_proxies == []
+    assert len(first_issues) == len(second_issues) == 1
+    assert first_issues[0].code == second_issues[0].code == "unsupported_protocol"
+    assert (
+        first_issues[0].message_redacted
+        == second_issues[0].message_redacted
+        == "unsupported protocol: mystery"
+    )
+    assert first_issues[0].raw_ref == second_issues[0].raw_ref == "proxies:0"
+    assert "sample-password" not in first_issues[0].message_redacted

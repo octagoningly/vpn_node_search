@@ -108,11 +108,13 @@ def to_mihomo_proxy(target: ProxyTarget) -> dict[str, Any]:
         if security == "reality":
             reality: dict[str, Any] = {}
             public_key = _first(
+                params.get("reality_public_key"),
                 params.get("public-key"),
                 params.get("publicKey"),
                 params.get("reality-public-key"),
             )
             short_id = _first(
+                params.get("reality_short_id"),
                 params.get("short-id"),
                 params.get("shortId"),
                 params.get("reality-short-id"),
