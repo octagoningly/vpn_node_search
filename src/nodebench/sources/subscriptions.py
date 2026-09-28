@@ -91,6 +91,7 @@ def collect_subscriptions(
     - 单源失败隔离；成功缓存不会被失败覆盖。
     - 原文整体作为 RawItem 交下游解析。
     - 报告不回显完整 URL（只使用不透明引用）。
+    - 离线（urls 为空 / NODEBENCH_OFFLINE / config.offline）不发起网络请求。
     """
     if not config.enabled:
         return CollectOutcome()
@@ -99,10 +100,13 @@ def collect_subscriptions(
     outcomes: list[SourceReport] = []
     items: list[RawItem] = []
     fetched_at = datetime.now(timezone.utc)
+    license_tag = (config.license_tag or LICENSE_TAG).strip() or LICENSE_TAG
 
     urls = [u.strip() for u in config.urls if u and u.strip()]
+    offline = bool(config.offline) or offline_requested()
+
     if not urls:
-        mode = MODE_OFFLINE if offline_requested() or config.offline else MODE_REAL
+        mode = MODE_OFFLINE if offline else MODE_REAL
         outcomes.append(
             SourceReport(
                 source_id=SOURCE_ID,
@@ -116,7 +120,26 @@ def collect_subscriptions(
                     )
                 ],
                 scope="",
-                mode=MODE_OFFLINE if mode == MODE_OFFLINE else mode,
+                mode=mode,
+            )
+        )
+        return CollectOutcome(items=items, reports=outcomes)
+
+    if offline:
+        outcomes.append(
+            SourceReport(
+                source_id=SOURCE_ID,
+                ok=True,
+                fetched=0,
+                errors=[
+                    make_error(
+                        "offline_mode",
+                        "offline mode requested; skipping subscription fetch",
+                        retryable=False,
+                    )
+                ],
+                scope="",
+                mode=MODE_OFFLINE,
             )
         )
         return CollectOutcome(items=items, reports=outcomes)
@@ -210,7 +233,7 @@ def collect_subscriptions(
                         content_type=content_type,
                         payload=text,
                         fetched_at=fetched_at,
-                        license_tag=LICENSE_TAG,
+                        license_tag=license_tag,
                         source_ref=ref,
                     )
                 )
@@ -252,7 +275,7 @@ def collect_subscriptions(
                         content_type=content_type,
                         payload=text,
                         fetched_at=fetched_at,
-                        license_tag=LICENSE_TAG,
+                        license_tag=license_tag,
                         source_ref=ref,
                     )
                 )
@@ -315,7 +338,7 @@ def collect_subscriptions(
                 content_type=content_type,
                 payload=text,
                 fetched_at=fetched_at,
-                license_tag=LICENSE_TAG,
+                license_tag=license_tag,
                 source_ref=ref,
             )
         )

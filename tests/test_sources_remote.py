@@ -591,3 +591,66 @@ def test_github_blocked_domain_constant_preserved():
     assert "localhost" in github_mod.BLOCKED_DOMAINS
     assert github_mod._is_blocked_domain("127.0.0.1") is True
     assert github_mod._is_blocked_domain("example.com") is False
+
+
+def test_subscriptions_config_offline_skips_network(tmp_path: Path, monkeypatch):
+    monkeypatch.delenv("NODEBENCH_OFFLINE", raising=False)
+    calls = {"n": 0}
+
+    def fake_urlopen(request, timeout=None):
+        calls["n"] += 1
+        raise AssertionError("offline mode must not open the network")
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    config = SubscriptionSourceConfig(
+        enabled=True,
+        urls=["https://subs.example.test/list.txt"],
+        offline=True,
+    )
+    outcome = subs_mod.collect_subscriptions(config, base_dir=tmp_path)
+    assert calls["n"] == 0
+    assert outcome.items == []
+    assert outcome.reports[0].ok is True
+    assert outcome.reports[0].mode == "offline"
+    assert outcome.reports[0].errors[0].code == "offline_mode"
+    assert "subs.example.test" not in outcome.reports[0].model_dump_json()
+
+
+def test_subscriptions_env_offline_skips_network(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("NODEBENCH_OFFLINE", "1")
+    calls = {"n": 0}
+
+    def fake_urlopen(request, timeout=None):
+        calls["n"] += 1
+        raise AssertionError("NODEBENCH_OFFLINE must not open the network")
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    config = SubscriptionSourceConfig(
+        enabled=True, urls=["https://subs.example.test/list.txt"]
+    )
+    outcome = subs_mod.collect_subscriptions(config, base_dir=tmp_path)
+    assert calls["n"] == 0
+    assert outcome.reports[0].mode == "offline"
+    assert outcome.items == []
+
+
+def test_subscriptions_license_tag_comes_from_config(tmp_path: Path, monkeypatch):
+    url = "https://subs.example.test/licensed.txt"
+    opener = make_opener(
+        {url: FakeResponse(b"vless://x@example.test:443#n\n", headers={"ETag": '"l"'})}
+    )
+    monkeypatch.setattr("urllib.request.urlopen", opener)
+    config = SubscriptionSourceConfig(
+        enabled=True, urls=[url], license_tag="cc-by-4.0"
+    )
+    outcome = subs_mod.collect_subscriptions(config, base_dir=tmp_path)
+    assert outcome.items[0].license_tag == "cc-by-4.0"
+
+
+def test_subscriptions_default_license_is_unknown(tmp_path: Path, monkeypatch):
+    url = "https://subs.example.test/plain.txt"
+    opener = make_opener({url: FakeResponse(b"vless://x@example.test:443#n\n")})
+    monkeypatch.setattr("urllib.request.urlopen", opener)
+    config = SubscriptionSourceConfig(enabled=True, urls=[url])
+    outcome = subs_mod.collect_subscriptions(config, base_dir=tmp_path)
+    assert outcome.items[0].license_tag == "unknown"

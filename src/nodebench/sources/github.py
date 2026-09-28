@@ -293,11 +293,11 @@ def _fetch_file_text(
 def collect_github(
     config: GithubSourceConfig, base_dir: Path | None = None, secrets: dict[str, str] | None = None
 ) -> CollectOutcome:
-    """采集 GitHub 代码搜索来源（真实 API 或离线模拟）。
+    """Collect from the GitHub code-search source (real API or offline sim).
 
-    真实模式：api.github.com/search/code + Bearer token。
-    离线模式：NODEBENCH_OFFLINE=1、配置 offline、无 token 或网络失败时降级，
-    并在 SourceReport.mode 中标注 mode=offline，不假装真实。
+    Real mode: api.github.com/search/code with Bearer token.
+    Offline: NODEBENCH_OFFLINE=1, config.offline, missing token, or
+    network failure degrade to simulation and report mode=offline.
     """
     if not config.enabled:
         return CollectOutcome()
