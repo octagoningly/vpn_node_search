@@ -1,0 +1,67 @@
+# Actions 侧：GitHub 代码搜索发现候选 + 可选粗测
+# 说明：Actions 测速是 GitHub 机房网络，不是用户本地；本 profile 默认只收集+评分，probe 可关。
+profile: actions-collect
+runner_id: github:actions
+sources:
+  local:
+    enabled: false
+  subscriptions:
+    enabled: true
+    urls:
+      - https://raw.githubusercontent.com/cmliu/WorkerVless2sub/main/addressesapi.txt
+      - https://raw.githubusercontent.com/cmliu/WorkerVless2sub/main/addressescsv.csv
+      - https://raw.githubusercontent.com/cmliu/WorkerVless2sub/main/addressesipv6api.txt
+    timeout_s: 20
+    license_tag: "MIT"
+    offline: false
+  github:
+    enabled: true
+    allowed_repositories:
+      - cmliu/WorkerVless2sub
+      - cmliu/edgetunnel
+      - XIU2/CloudflareSpeedTest
+      - 735754647/Free-Nodes
+    queries:
+      - 'filename:addressesapi.txt'
+      - 'filename:addressescsv.csv'
+      - 'filename:cf-addapi.txt'
+      - '"IP地址" filename:addressescsv.csv'
+      - 'filename:ip.txt CloudflareSpeedTest'
+    max_files_per_run: 30
+    cache_ttl_hours: 12
+    offline: false
+  cf:
+    enabled: true
+    candidate_files: []
+    max_ips_per_run: 200
+  candidate_import:
+    enabled: false
+probe:
+  proxy:
+    enabled: false
+  cf:
+    enabled: true
+    cfst_path: tools/cfst/CloudflareSpeedTest.exe
+    target_host: octagoningly-vpn.pages.dev
+    speedtest_url: https://speed.cloudflare.com/__down?bytes=5000000
+    max_nodes: 200
+    max_download_nodes: 30
+    total_deadline_s: 240
+    allowed_ports:
+      - 443
+      - 8443
+      - 2087
+      - 2053
+      - 80
+      - 8080
+      - 8880
+      - 2052
+      - 2082
+      - 2083
+      - 2086
+      - 2095
+      - 2096
+publish:
+  enabled: false
+  allow_proxy_credentials: false
+  cf_candidates_authorized: true

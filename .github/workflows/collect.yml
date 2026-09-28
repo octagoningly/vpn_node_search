@@ -1,0 +1,95 @@
+# NodeBench Collect — GitHub code-search discovers CF/node candidates on Actions
+#
+# 分工（务必理解）：
+#   - Actions 跑 = GitHub 机房网络，**不是**用户本地体验
+#   - 本 workflow 只做「发现候选 + 可选粗测」，产出脱敏候选清单 artifact
+#   - 本地再用 `nodebench run --profile auto-collect` 做最终测速与发布
+#
+# 触发：
+#   - workflow_dispatch（手动，可传 queries）
+#   - schedule（每天一次，UTC 17:10 ≈ 北京 01:10）
+#
+# 需要的 secrets（仓库内置 GITHUB_TOKEN 已够 code search）：
+#   GITHUB_TOKEN — 自动注入，用于 api.github.com/search/code
+
+name: NodeBench Collect
+
+on:
+  workflow_dispatch:
+    inputs:
+      queries:
+        description: "GitHub code-search queries (comma-separated)"
+        required: false
+        default: ""
+      max_files:
+        description: "max files per run"
+        required: false
+        default: "30"
+  schedule:
+    - cron: "10 17 * * *"
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: nodebench-collect
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    name: Discover candidates via GitHub search
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral/setup-uv@v3
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Collect (GitHub + subscriptions)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          EXTRA=""
+          if [ -n "${{ github.event.inputs.queries }}" ]; then
+            # 仅作展示；具体 queries 以 actions-collect.yaml 为准
+            echo "requested queries: ${{ github.event.inputs.queries }}"
+          fi
+          uv run nodebench run --profile actions-collect --no-publish
+        continue-on-error: true
+
+      - name: Stage safe artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p _collect_out
+          # 只挑脱敏诊断/报告；绝不上传 db、代理凭据、订阅原文
+          find output -type f \( \
+            -name 'run-report.json' -o \
+            -name 'dry-run-report.json' -o \
+            -name 'scored.json' -o \
+            -name 'manifest.json' -o \
+            -name 'report.json' \
+          \) -print0 | while IFS= read -r -d '' f; do
+            cp "$f" "_collect_out/" 2>/dev/null || true
+          done
+          ls -la _collect_out || true
+
+      - name: Upload diagnostic artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nodebench-collect-output
+          path: _collect_out/
+          if-no-files-found: warn
+          retention-days: 7
