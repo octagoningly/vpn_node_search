@@ -2,8 +2,7 @@
 # Usage:  powershell -ExecutionPolicy Bypass -File scripts/publish.ps1
 # Env:    NODEBENCH_PROFILE  (default auto-collect)
 
-$root = Split-Path -Parent $PcriptRoot
-if (-not $root) { $root = Split-Path -Parent $PSScriptRoot }
+$root = Split-Path -Parent $PSScriptRoot
 $profileName = $env:NODEBENCH_PROFILE
 if (-not $profileName) { $profileName = "auto-collect" }
 
