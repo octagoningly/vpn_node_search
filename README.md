@@ -68,6 +68,14 @@ uv run nodebench run --profile auto-collect
 
 测速完成后，把 `output/publish-staging/` 里四个文件覆盖推到仓库 `public` 分支，管理页 ADDAPI 链接即可自动拿到新数据（见 [`docs/WorkerVless2sub填写说明.md`](docs/WorkerVless2sub填写说明.md)）。
 
+**一键更新（推荐）**：双击 `scripts/publish.bat`，或执行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/publish.ps1
+```
+
+会自动测速并推送到 `public` 分支。edgetunnel 管理页里的 ADDAPI 链接**只需填一次**，之后每次跑完自动生效，无需再改。
+
 评分权重、速度硬门槛、备注格式均可在 `config/default.yaml` 的 `scoring` 段自定义。
 
 ## 二进制获取
