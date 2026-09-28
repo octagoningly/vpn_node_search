@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller spec for NodeBench Desktop launcher.
+"""PyInstaller spec — NodeBench Desktop (native window + web UI).
 
-Build:  pyinstaller gui/nodebench.spec
+Build:  uv run pyinstaller --noconfirm gui/nodebench.spec
 Output: dist/NodeBench/NodeBench.exe
 """
 
@@ -10,11 +10,18 @@ from pathlib import Path
 root = Path(SPECPATH).resolve().parent  # project root
 
 a = Analysis(
-    [str(root / "gui" / "app.py")],
-    pathex=[str(root)],
+    [str(root / "gui" / "desktop.py")],
+    pathex=[str(root), str(root / "gui")],
     binaries=[],
-    datas=[],
-    hiddenimports=["yaml", "nodebench"],
+    datas=[
+        (str(root / "gui" / "web"), "gui/web"),
+    ],
+    hiddenimports=[
+        "yaml",
+        "nodebench",
+        "server",
+        "webview",
+    ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -34,7 +41,7 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=False,
-    console=False,          # windowed app, no console
+    console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,

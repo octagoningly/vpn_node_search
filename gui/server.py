@@ -20,6 +20,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WEB = Path(__file__).resolve().parent / "web"
+# Frozen exe: assets live next to the executable (or in _internal/gui/web).
+if getattr(sys, "frozen", False):
+    base = Path(sys.executable).resolve().parent
+    for cand in (base / "gui" / "web", base / "_internal" / "gui" / "web"):
+        if cand.is_dir():
+            WEB = cand
+            ROOT = base
+            break
 ENV_PATH = ROOT / ".env"
 CONFIG_PATH = ROOT / "config" / "default.yaml"
 POOL_PATH = ROOT / "candidates" / "user-import.txt"
@@ -349,11 +357,12 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
 
-def main() -> int:
+def main(open_browser: bool = True) -> int:
     server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
     url = f"http://127.0.0.1:{PORT}"
     print(f"NodeBench UI → {url}")
-    threading.Timer(0.4, lambda: __import__("webbrowser").open(url)).start()
+    if open_browser:
+        threading.Timer(0.4, lambda: __import__("webbrowser").open(url)).start()
     try:
         server.serve_forever()
     except KeyboardInterrupt:
