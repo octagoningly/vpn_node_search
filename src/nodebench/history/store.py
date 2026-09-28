@@ -11,6 +11,7 @@ from nodebench.core.errors import StorageError
 from nodebench.core.schema import (
     EdgeEndpoint,
     EndpointProbeResult,
+    IntelligenceReport,
     PersistSummary,
     ProxyNode,
     ProxyProbeResult,
@@ -296,6 +297,72 @@ def load_entities(
     return nodes, edges
 
 
+def record_intelligence(
+    db_path: str | Path,
+    report: IntelligenceReport,
+    *,
+    test_type: str = PROXY_TEST_TYPE,
+) -> int:
+    """Persist exit and reputation observations from an intelligence report."""
+    conn: sqlite3.Connection | None = None
+    written = 0
+    try:
+        conn = dbmod.open_db(db_path)
+        conn.execute("BEGIN IMMEDIATE")
+        for entry in report.entries:
+            conn.execute(
+                dbmod.UPSERT_EXIT,
+                (
+                    str(entry.item_id),
+                    str(report.runner_id),
+                    str(report.run_id),
+                    test_type,
+                    dbmod.utc_stamp(entry.observed_at),
+                    str(entry.exit_ip or ""),
+                    entry.country_code or None,
+                    entry.asn or None,
+                    entry.isp or None,
+                ),
+            )
+            written += 1
+        for snapshot in report.reputations:
+            conn.execute(
+                dbmod.UPSERT_REPUTATION,
+                (
+                    str(snapshot.item_id),
+                    str(report.runner_id),
+                    str(report.run_id),
+                    test_type,
+                    dbmod.utc_stamp(snapshot.observed_at),
+                    str(snapshot.provider or ""),
+                    (
+                        float(snapshot.raw_score)
+                        if snapshot.raw_score is not None
+                        else None
+                    ),
+                    float(snapshot.risk) if snapshot.risk is not None else None,
+                    str(snapshot.evidence or ""),
+                ),
+            )
+            written += 1
+        conn.execute("COMMIT")
+    except (sqlite3.Error, OSError) as err:
+        if conn is not None:
+            try:
+                conn.execute("ROLLBACK")
+            except sqlite3.Error:
+                pass
+        raise StorageError(
+            code="storage_error",
+            message=f"{type(err).__name__}: {err}",
+            retryable=True,
+        ) from err
+    finally:
+        if conn is not None:
+            conn.close()
+    return written
+
+
 def decode_probe_results(payload: Mapping[str, Any]) -> list[Any]:
     """Rebuild probe result models from a probe-results.json payload."""
     results: list[Any] = []
@@ -322,6 +389,7 @@ __all__ = [
     "PROXY_TEST_TYPE",
     "ENDPOINT_TEST_TYPE",
     "persist_run",
+    "record_intelligence",
     "load_entities",
     "decode_probe_results",
 ]

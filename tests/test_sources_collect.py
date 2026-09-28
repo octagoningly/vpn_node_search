@@ -47,16 +47,17 @@ def test_all_sources_disabled_returns_empty(tmp_path: Path):
     assert outcome.reports == []
 
 
-def test_pending_adapter_failure_is_isolated(tmp_path: Path):
+def test_github_adapter_runs_without_token(tmp_path: Path):
     write(tmp_path / "input" / "nodes.txt", URI_TEXT)
     config = local_config()
-    config.sources.github = GithubSourceConfig(enabled=True)
+    config.sources.github = GithubSourceConfig(enabled=True, offline=True)
     outcome = collect_all(config, base_dir=tmp_path)
     assert len(outcome.items) == 1
     by_id = {report.source_id: report for report in outcome.reports}
     assert by_id["local"].ok is True
-    assert by_id["github"].ok is False
-    assert by_id["github"].errors[0].code == "adapter_unavailable"
+    assert by_id["github"].mode == "offline"
+    codes = {error.code for error in by_id["github"].errors}
+    assert "offline_mode" in codes or "missing_token" in codes or not by_id["github"].errors
 
 
 def test_adapter_exception_becomes_failed_report(monkeypatch, tmp_path: Path):
@@ -78,10 +79,12 @@ def test_adapter_exception_becomes_failed_report(monkeypatch, tmp_path: Path):
     assert "***" in message
 
 
-def test_pending_report_never_echoes_subscription_urls(tmp_path: Path):
+def test_subscription_report_never_echoes_urls(tmp_path: Path):
     config = local_config()
     config.sources.subscriptions = SubscriptionSourceConfig(
-        enabled=True, urls=["https://subs.example.test/list?token=abc12345"]
+        enabled=True,
+        urls=["https://subs.example.test/list?token=abc12345"],
+        offline=True,
     )
     outcome = collect_all(config, base_dir=tmp_path)
     report = next(

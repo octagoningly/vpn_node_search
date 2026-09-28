@@ -138,8 +138,8 @@ def test_post_stages_stop_after_persist_failure(tmp_path, monkeypatch):
         "status": "failed",
         "errors": ["disk_full: no space left"],
     }
-    assert set(report["stages"]) == {"persist"}
-    assert report["stages_pending"] == ["inspect", "score", "export", "publish"]
+    assert set(report["stages"]) == {"inspect", "persist"}
+    assert report["stages_pending"] == ["score", "export", "publish"]
     assert report["licenses"] == [
         {"source_id": "a", "license_tag": "mit", "redistributable": True},
         {"source_id": "b", "license_tag": "mit", "redistributable": True},

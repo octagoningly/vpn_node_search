@@ -169,6 +169,9 @@ class SourceReport(BaseModel):
     errors: list[ErrorInfo] = Field(default_factory=list)
     scope: str = ""
     redacted: bool = True
+    mode: str = ""
+    etag: str = ""
+    last_modified: str = ""
 
 
 class ProbeStatus(str, Enum):
@@ -436,6 +439,88 @@ class ScoreIssue(BaseModel):
     message_redacted: str = ""
 
 
+UNKNOWN_PLACEHOLDER = "unknown"
+
+
+class ExitObservation(BaseModel):
+    """Geo/ASN/ISP snapshot for one proxy exit IP."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    item_id: str
+    exit_ip: str = ""
+    service: str = ""
+    observed_at: datetime = Field(default_factory=_utc_now)
+    status: Status = Status.UNKNOWN
+    country_code: str = UNKNOWN_PLACEHOLDER
+    asn: str = UNKNOWN_PLACEHOLDER
+    isp: str = UNKNOWN_PLACEHOLDER
+    errors: list[ErrorInfo] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _exit_invariants(self) -> "ExitObservation":
+        if self.status is Status.OK and not self.exit_ip.strip():
+            raise ValueError("status=ok requires a non-empty exit_ip")
+        return self
+
+
+class ReputationObservation(BaseModel):
+    """Optional reputation-provider snapshot for one exit IP.
+
+    ``risk`` is the provider score normalized to 0-100 (higher = riskier).
+    It stays ``None`` when the provider is disabled or failed so purity is
+    never fabricated.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    item_id: str
+    exit_ip: str = ""
+    provider: str = ""
+    raw_score: float | None = None
+    risk: float | None = None
+    risk_level: str = UNKNOWN_PLACEHOLDER
+    evidence: str = ""
+    observed_at: datetime = Field(default_factory=_utc_now)
+    status: Status = Status.UNKNOWN
+    errors: list[ErrorInfo] = Field(default_factory=list)
+
+    @field_validator("raw_score", "risk")
+    @classmethod
+    def _score_bounds(cls, value: float | None, info: Any) -> float | None:
+        if value is None:
+            return None
+        number = float(value)
+        if info.field_name == "risk" and not 0.0 <= number <= 100.0:
+            raise ValueError("risk must be between 0 and 100")
+        return number
+
+    @model_validator(mode="after")
+    def _reputation_invariants(self) -> "ReputationObservation":
+        if self.status is Status.OK and self.risk is None:
+            raise ValueError("status=ok requires a risk score")
+        return self
+
+
+class IntelligenceReport(BaseModel):
+    """Aggregated exit + reputation intelligence for one run."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    run_id: str
+    runner_id: str
+    generated_at: datetime = Field(default_factory=_utc_now)
+    counts: dict[str, int] = Field(default_factory=dict)
+    entries: list[ExitObservation] = Field(default_factory=list)
+    reputations: list[ReputationObservation] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _counts_non_negative(self) -> "IntelligenceReport":
+        for name, value in self.counts.items():
+            _check_counter(name, value)
+        return self
+
+
 class RankedProxy(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -685,6 +770,10 @@ __all__ = [
     "SourceQuality",
     "PersistSummary",
     "ScoreIssue",
+    "UNKNOWN_PLACEHOLDER",
+    "ExitObservation",
+    "ReputationObservation",
+    "IntelligenceReport",
     "RankedProxy",
     "RankedEndpoint",
     "ScoreReport",

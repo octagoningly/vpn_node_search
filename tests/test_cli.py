@@ -241,11 +241,10 @@ def test_project_samples_stay_reachable():
     assert len(list(INPUT_DIR.glob("*"))) == 6
 
 
-def test_stub_stage_is_not_implemented(capsys):
+def test_inspect_requires_run_id(capsys):
     code = main(["inspect"])
     out = capsys.readouterr()
-    assert code == 0
-    assert "Usage: nodebench inspect --run-id" in out.out
+    assert code != 0
 
 
 def test_unknown_command_returns_two(capsys):

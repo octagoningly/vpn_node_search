@@ -21,7 +21,12 @@ from nodebench.core.errors import (
 from nodebench.core.orchestrator import resolve_run_exit, run_pipeline
 from nodebench.core.schema import RUN_ID_PATTERN, SCHEMA_VERSION
 from nodebench.core.serialization import dumps_json, public_dump, write_json_atomic
-from nodebench.core.stages import export_artifacts, score_artifacts, scored_path
+from nodebench.core.stages import (
+    export_artifacts,
+    inspect_artifacts,
+    score_artifacts,
+    scored_path,
+)
 from nodebench.probes import (
     LEVEL_WARN,
     as_check,
@@ -354,36 +359,51 @@ def _cmd_probe(args: argparse.Namespace) -> int:
 
 
 def _cmd_inspect(args: argparse.Namespace) -> int:
-    config = _load(args)
-    run_id = str(getattr(args, "run_id", None) or "")
-    if not run_id:
-        print("Usage: nodebench inspect --run-id <run_id>")
-        print("  Shows exit IP, probe mode, and reputation for a given run.")
-        print("  GeoIP/ASN/ISP data requires external reputation services.")
-        return 0
-    # Load run artifacts
-    report_path = config.output_dir / run_id / "run-report.json"
-    if not report_path.exists():
-        print(f"Error: run-report.json not found for run {run_id}")
-        return 1
-    import json
-    with open(report_path, encoding="utf-8") as f:
-        report = json.load(f)
-    # Extract exit IP and basic info
-    proxy = report.get("probe", {}).get("proxy", {})
-    exit_ip = proxy.get("exit_ip", "unknown")
-    mode = proxy.get("mode", "unknown")
-    skipped_reason = proxy.get("skipped_reason", "")
-    # Reputation: since no external reputation service is configured, mark as unknown
-    reputation = "unknown"
+    """Generate and display exit/Geo/ASN/ISP/reputation intelligence for a run."""
+    config = _load(args, use_input=False)
+    run_id = _require_run_id(args)
+    summary = inspect_artifacts(config, run_id)
+    payload = summary.get("report_payload") or {}
+    counts = payload.get("counts") or {}
+    entries = payload.get("entries") or []
+    reputations = {
+        str(item.get("item_id") or ""): item
+        for item in (payload.get("reputations") or [])
+        if isinstance(item, Mapping)
+    }
     print(f"Run ID: {run_id}")
-    print(f"  Exit IP: {exit_ip}")
-    print(f"  Probe Mode: {mode}")
-    if skipped_reason:
-        print(f"  Skipped Reason: {skipped_reason}")
-    print(f"  Reputation: {reputation}")
-    # TODO: Add GeoIP/ASN/ISP lookup when external services are configured
-    print("\n(Inspect: GeoIP/ASN/ISP data would be fetched from external services here.)")
+    print(
+        "  items={0} exit_ok={1} exit_unknown={2} reputation_ok={3}".format(
+            counts.get("items", len(entries)),
+            counts.get("exit_ok", 0),
+            counts.get("exit_unknown", 0),
+            counts.get("reputation_ok", 0),
+        )
+    )
+    for entry in entries:
+        if not isinstance(entry, Mapping):
+            continue
+        item_id = str(entry.get("item_id") or "")
+        exit_ip = str(entry.get("exit_ip") or "unknown")
+        country = str(entry.get("country_code") or "unknown")
+        asn = str(entry.get("asn") or "unknown")
+        isp = str(entry.get("isp") or "unknown")
+        exit_status = str(entry.get("status") or "unknown")
+        print(f"  [{item_id}] exit_ip={exit_ip} status={exit_status}")
+        print(f"    Geo: country={country} asn={asn} isp={isp}")
+        snapshot = reputations.get(item_id) or {}
+        risk = snapshot.get("risk")
+        risk_text = "unknown" if risk is None else f"{risk}"
+        print(
+            "    Reputation: provider={0} risk={1} level={2} status={3}".format(
+                snapshot.get("provider") or "unknown",
+                risk_text,
+                snapshot.get("risk_level") or "unknown",
+                snapshot.get("status") or "unknown",
+            )
+        )
+    report = summary.get("report") or ""
+    print(f"[{run_id}] intelligence_report={report}")
     return 0
 
 
@@ -731,7 +751,7 @@ def build_parser() -> argparse.ArgumentParser:
                 default=None,
                 help="directory that receives probe reports",
             )
-        if name in ("score", "export"):
+        if name in ("score", "export", "inspect"):
             stage_parser.add_argument(
                 "--output-dir",
                 default=None,

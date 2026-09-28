@@ -15,6 +15,7 @@ from nodebench.core.schema import (
     EdgeEndpoint,
     ExportOutcome,
     ProxyNode,
+    ProxyProbeResult,
     RawItem,
     ScoreReport,
     SourceReport,
@@ -30,17 +31,20 @@ from nodebench.history.store import (
     decode_probe_results,
     load_entities,
     persist_run,
+    record_intelligence,
 )
+from nodebench.intelligence import IntelligenceService
 from nodebench.probes import project_root
 from nodebench.publishing import is_redistributable, publish_output
 from nodebench.scoring import SCORING_VERSION, score_run
 
-STAGE_ORDER = ("persist", "score", "export", "publish")
+STAGE_ORDER = ("inspect", "persist", "score", "export", "publish")
 EXPORT_DIR_NAME = "export"
 LATEST_DIR_NAME = "latest"
 SCORED_NAME = "scored.json"
 PROBE_RESULTS_NAME = "probe-results.json"
 RUN_REPORT_NAME = "run-report.json"
+INTELLIGENCE_NAME = "intelligence-report.json"
 
 
 def output_base(config: AppConfig) -> Path:
@@ -56,6 +60,10 @@ def database_path(config: AppConfig) -> Path:
 
 def scored_path(config: AppConfig, run_id: str) -> Path:
     return output_base(config) / run_id / SCORED_NAME
+
+
+def intelligence_path(config: AppConfig, run_id: str) -> Path:
+    return output_base(config) / run_id / INTELLIGENCE_NAME
 
 
 def export_dir(config: AppConfig, run_id: str) -> Path:
@@ -151,6 +159,31 @@ def run_persist_stage(
         window_days=int(config.history.days),
     )
     return public_dump(summary)
+
+
+def run_inspect_stage(
+    config: AppConfig,
+    report: Mapping[str, Any],
+    *,
+    probe_results: Sequence[Any],
+) -> dict[str, Any]:
+    """Collect exit IP / Geo / reputation intelligence for probed nodes."""
+    run_id = str(report["run_id"])
+    runner_id = str(report["runner_id"])
+    service = IntelligenceService(config.intelligence)
+    results = [item for item in probe_results if isinstance(item, ProxyProbeResult)]
+    intel = service.inspect_results(results, run_id=run_id, runner_id=runner_id)
+    write_json_atomic(intelligence_path(config, run_id), public_dump(intel))
+    persisted = 0
+    db_path = database_path(config)
+    if db_path.is_file():
+        persisted = record_intelligence(db_path, intel)
+    return {
+        "status": "ok",
+        "counts": dict(intel.counts),
+        "persisted": persisted,
+        "report": str(intelligence_path(config, run_id)),
+    }
 
 
 def run_score_stage(
@@ -277,7 +310,13 @@ def run_post_stages(
         report["stages"] = stages
         report["stages_pending"] = pending
         try:
-            if name == "persist":
+            if name == "inspect":
+                summary = run_inspect_stage(
+                    config,
+                    report,
+                    probe_results=probe_results,
+                )
+            elif name == "persist":
                 summary = run_persist_stage(
                     config,
                     report,
@@ -427,6 +466,16 @@ def score_artifacts(config: AppConfig, run_id: str) -> ScoreReport:
     return score_report
 
 
+def inspect_artifacts(config: AppConfig, run_id: str) -> dict[str, Any]:
+    """Rebuild intelligence from persisted probe results (standalone inspect)."""
+    results = load_probe_results(config, run_id)
+    report = load_run_report(config, run_id)
+    summary = run_inspect_stage(config, report, probe_results=results)
+    payload = _read_json(intelligence_path(config, run_id), "intelligence_report_missing")
+    summary["report_payload"] = payload
+    return summary
+
+
 def export_artifacts(config: AppConfig, run_id: str) -> ExportOutcome:
     """Rebuild export artifacts from persisted inputs (standalone export stage)."""
     report = load_run_report(config, run_id)
@@ -452,10 +501,13 @@ __all__ = [
     "PROBE_RESULTS_NAME",
     "RUN_REPORT_NAME",
     "SCORED_NAME",
+    "INTELLIGENCE_NAME",
     "error_text",
     "export_artifacts",
     "export_dir",
     "database_path",
+    "inspect_artifacts",
+    "intelligence_path",
     "license_entries",
     "load_probe_results",
     "load_run_report",
@@ -463,6 +515,7 @@ __all__ = [
     "output_base",
     "register_node_secrets",
     "run_export_stage",
+    "run_inspect_stage",
     "run_persist_stage",
     "run_post_stages",
     "run_publish_stage",

@@ -8,6 +8,9 @@ sources:
   subscriptions:
     enabled: false
     urls: []
+    timeout_s: 15
+    user_agent: "NodeBench/0.1 (+https://github.com/local/nodebench; bounded-research)"
+    offline: false
   github:
     enabled: false
     allowed_repositories: []
@@ -15,6 +18,9 @@ sources:
       - '"vless://" filename:sub.txt'
     max_files_per_run: 30
     cache_ttl_hours: 24
+    timeout_s: 15
+    user_agent: "NodeBench/0.1 (+https://github.com/local/nodebench; bounded-research)"
+    offline: false
   cf:
     enabled: false
     candidate_files: []
@@ -46,6 +52,10 @@ probe:
     ip_family: "4"
 intelligence:
   reputation_enabled: false
+  echo_url: ""
+  geo_url: ""
+  reputation_url: ""
+  timeout: 5.0
 history:
   days: 14
 scoring:

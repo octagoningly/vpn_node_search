@@ -206,6 +206,19 @@ UPSERT_EXIT = """
         isp=excluded.isp
 """
 
+UPSERT_REPUTATION = """
+    INSERT INTO reputation_observations (
+        item_id, runner_id, run_id, test_type, observed_at,
+        provider, raw_score, risk_level, evidence
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(item_id, runner_id, run_id, test_type) DO UPDATE SET
+        observed_at=excluded.observed_at,
+        provider=excluded.provider,
+        raw_score=excluded.raw_score,
+        risk_level=excluded.risk_level,
+        evidence=excluded.evidence
+"""
+
 
 def utc_stamp(moment: datetime | None = None) -> str:
     value = moment or datetime.now(timezone.utc)
@@ -251,6 +264,7 @@ __all__ = [
     "UPSERT_SOURCE_ITEM",
     "UPSERT_OBSERVATION",
     "UPSERT_EXIT",
+    "UPSERT_REPUTATION",
     "open_db",
     "utc_stamp",
 ]
