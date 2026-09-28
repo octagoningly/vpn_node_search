@@ -1,0 +1,599 @@
+{
+  "schema_version": 1,
+  "run_id": "20260928T110905Z-cd060e",
+  "runner_id": "local:desktop-a",
+  "profile": "auto-collect",
+  "generated_at": "2026-09-28T11:14:14Z",
+  "dry_run": false,
+  "stages_pending": [],
+  "stages": {
+    "inspect": {
+      "status": "ok",
+      "counts": {
+        "items": 0,
+        "exit_ok": 0,
+        "exit_unknown": 0,
+        "geo_unknown": 0,
+        "reputation_ok": 0,
+        "reputation_unknown": 0
+      },
+      "persisted": 0,
+      "report": "D:\\study\\AI\\vpn_node_search\\output\\20260928T110905Z-cd060e\\intelligence-report.json"
+    },
+    "persist": {
+      "status": "ok",
+      "reason": "",
+      "database": "D:\\study\\AI\\vpn_node_search\\output\\nodebench.db",
+      "runs": 1,
+      "sources": 10,
+      "items": 2294,
+      "observations": 2294,
+      "pruned": 0,
+      "source_quality": [
+        {
+          "source_id": "cf",
+          "runs_seen": 10,
+          "ok_runs": 10,
+          "fetched_total": 10,
+          "error_total": 0
+        },
+        {
+          "source_id": "github",
+          "runs_seen": 6,
+          "ok_runs": 6,
+          "fetched_total": 0,
+          "error_total": 0
+        },
+        {
+          "source_id": "local",
+          "runs_seen": 6,
+          "ok_runs": 6,
+          "fetched_total": 36,
+          "error_total": 0
+        },
+        {
+          "source_id": "subscriptions",
+          "runs_seen": 6,
+          "ok_runs": 5,
+          "fetched_total": 6,
+          "error_total": 2
+        }
+      ],
+      "error": ""
+    },
+    "score": {
+      "status": "ok",
+      "counts": {
+        "proxies": 0,
+        "endpoints": 2294,
+        "ranked": 4,
+        "filtered": 395,
+        "pending": 1895,
+        "issues": 0
+      },
+      "issues": []
+    },
+    "export": {
+      "status": "ok",
+      "directory": "D:\\study\\AI\\vpn_node_search\\output\\20260928T110905Z-cd060e\\export",
+      "errors": [],
+      "validation": {
+        "ok": true,
+        "errors": [],
+        "files_checked": [
+          "cf-addapi.txt",
+          "cf-addcsv.csv",
+          "report.json",
+          "manifest.json"
+        ]
+      },
+      "publishable": true,
+      "counts": {
+        "proxies": 0,
+        "endpoints": 4,
+        "files": 6,
+        "skipped": 0
+      },
+      "visibility": "private"
+    },
+    "publish": {
+      "status": "ok",
+      "reason": "",
+      "path": "D:\\study\\AI\\vpn_node_search\\output\\latest",
+      "visibility": "public",
+      "files": [
+        "cf-addapi.txt",
+        "cf-addcsv.csv",
+        "manifest.json",
+        "report.json"
+      ],
+      "blocked": [],
+      "excluded": [
+        "proxy-clash.yaml",
+        "proxy-raw.txt"
+      ],
+      "excluded_reasons": {
+        "proxy-clash.yaml": "no_content",
+        "proxy-raw.txt": "no_content"
+      },
+      "errors": [],
+      "replaced_previous": true,
+      "cf_candidates_user_supplied": true,
+      "cf_candidates_authorized": true,
+      "public_urls": []
+    }
+  },
+  "licenses": [
+    {
+      "source_id": "cf",
+      "license_tag": "user_supplied",
+      "redistributable": false
+    },
+    {
+      "source_id": "subscriptions",
+      "license_tag": "MIT",
+      "redistributable": true
+    }
+  ],
+  "status": "partial",
+  "diagnostics": [
+    "github:fetch_failed: GitHub search failed: network error for [redacted-url]: [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)",
+    "github:offline_fallback: network failure; falling back to offline simulation"
+  ],
+  "counts": {
+    "sources_total": 10,
+    "sources_failed": 1,
+    "raw_items": 4,
+    "parsed_proxies": 0,
+    "parsed_endpoints": 2327,
+    "parse_issues": 0,
+    "proxy_nodes": 0,
+    "edge_endpoints": 2294,
+    "dupes_merged": 33
+  },
+  "protocol_support": {
+    "rule": "probe_supported requires a real connectivity test (probe_mode=real and status=ok); otherwise parse_only",
+    "levels": {},
+    "level_values": [
+      "parse_only",
+      "probe_supported"
+    ]
+  },
+  "limits": {
+    "budget": {},
+    "caps": {
+      "cf_max_ips_per_run": 150,
+      "github_max_files_per_run": 30
+    },
+    "truncated_sources": [],
+    "failed_sources": [
+      "github"
+    ],
+    "disabled_sources": [
+      "local"
+    ]
+  },
+  "source_reports": [
+    {
+      "source_id": "cf",
+      "ok": true,
+      "fetched": 1,
+      "errors": [],
+      "scope": "candidates/cf-user-20260928.txt",
+      "redacted": true,
+      "mode": "",
+      "etag": "",
+      "last_modified": ""
+    },
+    {
+      "source_id": "subscriptions",
+      "ok": true,
+      "fetched": 1,
+      "errors": [],
+      "scope": "sub:5df170d69a553e1a",
+      "redacted": true,
+      "mode": "real",
+      "etag": "\"517cbd9bcf02b3744ba7b9be1dd55852c8a80e1da23eef12ddd780ff8197aca8\"",
+      "last_modified": ""
+    },
+    {
+      "source_id": "subscriptions",
+      "ok": true,
+      "fetched": 1,
+      "errors": [],
+      "scope": "sub:ba02c7ec0ff9d78c",
+      "redacted": true,
+      "mode": "real",
+      "etag": "\"4350fdeec17fc83f8fbe9321173c44ff4ce61bb1a1935eaf45ce428b1f1dc14f\"",
+      "last_modified": ""
+    },
+    {
+      "source_id": "subscriptions",
+      "ok": true,
+      "fetched": 1,
+      "errors": [],
+      "scope": "sub:dfbb28e59c03d292",
+      "redacted": true,
+      "mode": "real",
+      "etag": "\"a7150f940285635f43f2e666e1541db93776fd635f01c97a76818c6937f13dc7\"",
+      "last_modified": ""
+    },
+    {
+      "source_id": "github",
+      "ok": false,
+      "fetched": 0,
+      "errors": [
+        {
+          "stage": "collect",
+          "code": "fetch_failed",
+          "message_redacted": "GitHub search failed: network error for [redacted-url]: [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)",
+          "retryable": true
+        },
+        {
+          "stage": "collect",
+          "code": "offline_fallback",
+          "message_redacted": "network failure; falling back to offline simulation",
+          "retryable": true
+        }
+      ],
+      "scope": "filename:addressesapi.txt",
+      "redacted": true,
+      "mode": "offline",
+      "etag": "",
+      "last_modified": ""
+    },
+    {
+      "source_id": "github",
+      "ok": true,
+      "fetched": 0,
+      "errors": [],
+      "scope": "filename:addressescsv.csv",
+      "redacted": true,
+      "mode": "offline",
+      "etag": "",
+      "last_modified": ""
+    },
+    {
+      "source_id": "github",
+      "ok": true,
+      "fetched": 0,
+      "errors": [],
+      "scope": "filename:cf-addapi.txt",
+      "redacted": true,
+      "mode": "offline",
+      "etag": "",
+      "last_modified": ""
+    },
+    {
+      "source_id": "github",
+      "ok": true,
+      "fetched": 0,
+      "errors": [],
+      "scope": "filename:addressesipv6api.txt",
+      "redacted": true,
+      "mode": "offline",
+      "etag": "",
+      "last_modified": ""
+    },
+    {
+      "source_id": "github",
+      "ok": true,
+      "fetched": 0,
+      "errors": [],
+      "scope": "\"IP地址\" filename:addressescsv.csv",
+      "redacted": true,
+      "mode": "offline",
+      "etag": "",
+      "last_modified": ""
+    },
+    {
+      "source_id": "github",
+      "ok": true,
+      "fetched": 0,
+      "errors": [],
+      "scope": "filename:ip.txt CloudflareSpeedTest",
+      "redacted": true,
+      "mode": "offline",
+      "etag": "",
+      "last_modified": ""
+    }
+  ],
+  "issues": [],
+  "probe": {
+    "proxy": {
+      "mode": "skip",
+      "backend": "mihomo",
+      "backend_version": "",
+      "skipped_reason": "disabled",
+      "attempted": 0,
+      "ok": 0,
+      "failed": 0,
+      "timeout": 0,
+      "measurement_error": 0,
+      "incompatible": 0,
+      "usable_real": 0,
+      "skipped": 0,
+      "simulated_results": 0
+    },
+    "cf": {
+      "mode": "real",
+      "backend": "cfst",
+      "backend_version": "",
+      "skipped_reason": "",
+      "attempted": 400,
+      "ok": 8,
+      "failed": 1,
+      "timeout": 373,
+      "measurement_error": 0,
+      "incompatible": 18,
+      "usable_real": 8,
+      "skipped": 1894,
+      "simulated_results": 0
+    }
+  },
+  "items_preview": {
+    "proxy_nodes": [],
+    "edge_endpoints": [
+      {
+        "item_id": "hmac-sha256:00139b56d9e1893fdac5b1f97ba1e87da6e611f9987d26abe9e84b808a95196e",
+        "kind": "edge_endpoint",
+        "address": "132.145.121.34",
+        "port": 2082,
+        "target_host": null,
+        "tls": false,
+        "source_ids": [
+          "subscriptions"
+        ],
+        "remarks": "",
+        "probe_status": "skipped"
+      },
+      {
+        "item_id": "hmac-sha256:00162691ed3deefbbe48a396c4b90a1cd4b4376cd2adf5568413f4e0172d6386",
+        "kind": "edge_endpoint",
+        "address": "155.248.160.83",
+        "port": 8080,
+        "target_host": null,
+        "tls": false,
+        "source_ids": [
+          "subscriptions"
+        ],
+        "remarks": "",
+        "probe_status": "skipped"
+      },
+      {
+        "item_id": "hmac-sha256:005490de574402f13a255d33a649d1021bb8ad853141742e1f5751067822d22f",
+        "kind": "edge_endpoint",
+        "address": "158.101.149.81",
+        "port": 2086,
+        "target_host": null,
+        "tls": false,
+        "source_ids": [
+          "subscriptions"
+        ],
+        "remarks": "",
+        "probe_status": "skipped"
+      },
+      {
+        "item_id": "hmac-sha256:005768a115d9fb27e2e89ae52e347c6690c8e5a716c57ba0b938601bb4f0323d",
+        "kind": "edge_endpoint",
+        "address": "132.145.125.165",
+        "port": 2082,
+        "target_host": null,
+        "tls": false,
+        "source_ids": [
+          "subscriptions"
+        ],
+        "remarks": "",
+        "probe_status": "skipped"
+      },
+      {
+        "item_id": "hmac-sha256:005e8d65b20a3ea5f0c04e1efb06a3e0cfd459b17586ca0a1c162f60068c48b6",
+        "kind": "edge_endpoint",
+        "address": "152.67.141.193",
+        "port": 443,
+        "target_host": null,
+        "tls": true,
+        "source_ids": [
+          "subscriptions"
+        ],
+        "remarks": "",
+        "probe_status": "timeout"
+      },
+      {
+        "item_id": "hmac-sha256:0060b88e653fbfd41d43c3f1f6bccd013e0376ea8a0762939ed606f7cd2eae4b",
+        "kind": "edge_endpoint",
+        "address": "132.226.200.151",
+        "port": 80,
+        "target_host": null,
+        "tls": false,
+        "source_ids": [
+          "subscriptions"
+        ],
+        "remarks": "",
+        "probe_status": "skipped"
+      },
+      {
+        "item_id": "hmac-sha256:007a83b20eab6655bd5a3909da24b9fd418355efbb71894a662a342fef068db5",
+        "kind": "edge_endpoint",
+        "address": "132.145.120.103",
+        "port": 8443,
+        "target_host": null,
+        "tls": true,
+        "source_ids": [
+          "subscriptions"
+        ],
+        "remarks": "",
+        "probe_status": "timeout"
+      },
+      {
+        "item_id": "hmac-sha256:008dc9467fe5fe7951e2d515ba7f34ba97cf7aa78168143cef8918159ed752b5",
+        "kind": "edge_endpoint",
+        "address": "131.186.58.151",
+        "port": 2087,
+        "target_host": null,
+        "tls": true,
+        "source_ids": [
+          "subscriptions"
+        ],
+        "remarks": "",
+        "probe_status": "skipped"
+      },
+      {
+        "item_id": "hmac-sha256:009719a6f6fd01f4dbdc10f932c851b5321f8998ec0ee6313a5cc78c5d088e81",
+        "kind": "edge_endpoint",
+        "address": "141.147.164.54",
+        "port": 2096,
+        "target_host": null,
+        "tls": true,
+        "source_ids": [
+          "subscriptions"
+        ],
+        "remarks": "",
+        "probe_status": "skipped"
+      },
+      {
+        "item_id": "hmac-sha256:009981e884f23289a97a4e5d21603811cdf988ba03e69984071121a14646af1f",
+        "kind": "edge_endpoint",
+        "address": "141.148.240.244",
+        "port": 443,
+        "target_host": null,
+        "tls": true,
+        "source_ids": [
+          "subscriptions"
+        ],
+        "remarks": "",
+        "probe_status": "timeout"
+      },
+      {
+        "item_id": "hmac-sha256:00df465c4a2dce759759df5d1b0a7265661c7854ab74aae3b0148ad8253a4103",
+        "kind": "edge_endpoint",
+        "address": "138.3.215.11",
+        "port": 2086,
+        "target_host": null,
+        "tls": false,
+        "source_ids": [
+          "subscriptions"
+        ],
+        "remarks": "",
+        "probe_status": "skipped"
+      },
+      {
+        "item_id": "hmac-sha256:00ef6b117922f5b36cfd7bb82b26e7f2373de8e466a1b0ae8dde87ae63df8ed6",
+        "kind": "edge_endpoint",
+        "address": "138.3.218.160",
+        "port": 2083,
+        "target_host": null,
+        "tls": true,
+        "source_ids": [
+          "subscriptions"
+        ],
+        "remarks": "",
+        "probe_status": "skipped"
+      },
+      {
+        "item_id": "hmac-sha256:0166b841b2276a4abf5df1c2e35103d4fd8962594aa12f6b5abf91f923dff196",
+        "kind": "edge_endpoint",
+        "address": "141.147.181.148",
+        "port": 2096,
+        "target_host": null,
+        "tls": true,
+        "source_ids": [
+          "subscriptions"
+        ],
+        "remarks": "",
+        "probe_status": "skipped"
+      },
+      {
+        "item_id": "hmac-sha256:01c2a81749d252b385def91b014bcf2cc145971160f72a8478daed2cba06d3f1",
+        "kind": "edge_endpoint",
+        "address": "168.138.198.202",
+        "port": 8080,
+        "target_host": null,
+        "tls": false,
+        "source_ids": [
+          "subscriptions"
+        ],
+        "remarks": "",
+        "probe_status": "skipped"
+      },
+      {
+        "item_id": "hmac-sha256:01dbc927b51c5c4ae6e8e4f0ff7b6d0c7ce8fd764e7f88af90d797423b45b86f",
+        "kind": "edge_endpoint",
+        "address": "141.147.160.221",
+        "port": 2086,
+        "target_host": null,
+        "tls": false,
+        "source_ids": [
+          "subscriptions"
+        ],
+        "remarks": "",
+        "probe_status": "skipped"
+      },
+      {
+        "item_id": "hmac-sha256:01def343d0a99aac9c0d0b6d053c83b0db80ccb8c0bbfbaae9ab8c697cd249f1",
+        "kind": "edge_endpoint",
+        "address": "131.186.37.49",
+        "port": 2053,
+        "target_host": null,
+        "tls": true,
+        "source_ids": [
+          "subscriptions"
+        ],
+        "remarks": "",
+        "probe_status": "skipped"
+      },
+      {
+        "item_id": "hmac-sha256:01e21ca98f1fcf02ad3c9044752472394b3bb02474d1c4d8733428b8e7ed6c91",
+        "kind": "edge_endpoint",
+        "address": "150.230.201.162",
+        "port": 8880,
+        "target_host": null,
+        "tls": false,
+        "source_ids": [
+          "subscriptions"
+        ],
+        "remarks": "",
+        "probe_status": "skipped"
+      },
+      {
+        "item_id": "hmac-sha256:01f208b77fa96325ecd7a365520e07c52b27ecc4a3c06422366f711c9df5991c",
+        "kind": "edge_endpoint",
+        "address": "141.147.175.230",
+        "port": 8443,
+        "target_host": null,
+        "tls": true,
+        "source_ids": [
+          "subscriptions"
+        ],
+        "remarks": "",
+        "probe_status": "timeout"
+      },
+      {
+        "item_id": "hmac-sha256:02213a1582ae17eae73ed88a49904417e3b6d179e4bc03c965dc5dc0a3a19da4",
+        "kind": "edge_endpoint",
+        "address": "168.138.47.238",
+        "port": 8443,
+        "target_host": null,
+        "tls": false,
+        "source_ids": [
+          "subscriptions"
+        ],
+        "remarks": "",
+        "probe_status": "skipped"
+      },
+      {
+        "item_id": "hmac-sha256:02589270e04ba5ae7ca9701ade1ac04536160fa5adf83e3a98663e0e9c157818",
+        "kind": "edge_endpoint",
+        "address": "141.147.181.242",
+        "port": 2095,
+        "target_host": null,
+        "tls": false,
+        "source_ids": [
+          "subscriptions"
+        ],
+        "remarks": "",
+        "probe_status": "skipped"
+      }
+    ]
+  }
+}

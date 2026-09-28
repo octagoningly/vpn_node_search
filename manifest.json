@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "run_id": "20260928T110905Z-cd060e",
+  "runner_id": "local:desktop-a",
+  "profile": "auto-collect",
+  "generated_at": "2026-09-28T11:14:14Z",
+  "status": "partial",
+  "scoring_version": "2",
+  "validation": {
+    "ok": true,
+    "errors": [],
+    "files_checked": [
+      "cf-addapi.txt",
+      "cf-addcsv.csv",
+      "report.json",
+      "manifest.json"
+    ]
+  },
+  "publishable": true,
+  "cf_candidates_user_supplied": true,
+  "cf_candidates_authorized": true,
+  "files": [
+    {
+      "name": "cf-addapi.txt",
+      "sha256": "6ac4c6ddec366878b421e4ef59fffc3adf3215eac2523c9aef4ebaa64c5ee48d",
+      "size_bytes": 142,
+      "entry_count": 4
+    },
+    {
+      "name": "cf-addcsv.csv",
+      "sha256": "592e66d1a692b980357fdcdf1369259abe98717a5d8c6902d6a45169f5748b4d",
+      "size_bytes": 242,
+      "entry_count": 4
+    },
+    {
+      "name": "report.json",
+      "sha256": "26e107e6228df3930fe574ed7089c0c269ff85e42f73d5787a372128ed6c41f7",
+      "size_bytes": 15671,
+      "entry_count": 0
+    }
+  ],
+  "counts": {
+    "proxies": 0,
+    "endpoints": 4,
+    "files": 4,
+    "skipped": 0
+  }
+}
