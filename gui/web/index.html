@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NodeBench · 优选节点</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark"></div>
+        <div>
+          <div class="brand-name">NodeBench</div>
+          <div class="brand-sub">CF 优选测评</div>
+        </div>
+      </div>
+
+      <nav class="nav">
+        <button class="nav-item active" data-page="home">
+          <span class="nav-icon">◎</span> 运行
+        </button>
+        <button class="nav-item" data-page="pool">
+          <span class="nav-icon">◈</span> IP 池
+        </button>
+        <button class="nav-item" data-page="filter">
+          <span class="nav-icon">⚙</span> 筛选评分
+        </button>
+        <button class="nav-item" data-page="keys">
+          <span class="nav-icon">✦</span> 密钥
+        </button>
+        <button class="nav-item" data-page="result">
+          <span class="nav-icon">☰</span> 结果
+        </button>
+      </nav>
+
+      <div class="sidebar-foot">
+        <div class="status-pill" id="readyPill">
+          <span class="dot"></span>
+          <span id="readyText">检查中…</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main">
+      <!-- HOME -->
+      <section class="page active" id="page-home">
+        <header class="page-head">
+          <div>
+            <h1>运行</h1>
+            <p class="lead">一键搜集 → 实测 → 评分 → 发布到你的 edgetunnel</p>
+          </div>
+          <button class="btn btn-primary btn-lg" id="btnRun">开始运行</button>
+        </header>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-label">流程</div>
+            <ol class="steps" id="runSteps">
+              <li data-step="collect"><span class="step-dot"></span>搜集候选（订阅 / GitHub / 本地）</li>
+              <li data-step="probe"><span class="step-dot"></span>CF 实测（速度 / 延迟 / 丢包）</li>
+              <li data-step="score"><span class="step-dot"></span>评分（纯净度 / 稳定性 / 属地）</li>
+              <li data-step="publish"><span class="step-dot"></span>发布到 public 分支</li>
+            </ol>
+          </div>
+
+          <div class="card">
+            <div class="card-label">发布地址</div>
+            <div class="code-block" id="publishUrl">https://raw.githubusercontent.com/&lt;user&gt;/&lt;repo&gt;/public/cf-addapi.txt</div>
+            <p class="hint">复制到 edgetunnel「自定义优选」，之后自动更新</p>
+            <button class="btn btn-ghost" id="btnCopyUrl">复制链接</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-label">日志</div>
+          <pre class="log" id="runLog">就绪。点击「开始运行」启动完整流程。</pre>
+        </div>
+      </section>
+
+      <!-- POOL -->
+      <section class="page" id="page-pool">
+        <header class="page-head">
+          <div>
+            <h1>IP 池</h1>
+            <p class="lead">手动导入，或从 GitHub / 订阅源自动发现</p>
+          </div>
+        </header>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-label">手动导入</div>
+            <textarea class="input area" id="poolInput" rows="8"
+              placeholder="支持多种格式，混用也可以：&#10;104.17.29.227:8443#备注&#10;cloudflare.182682.xyz&#10;https://example.com/addressesapi.txt&#10;104.18.33.138,443"></textarea>
+            <div class="row">
+              <button class="btn btn-primary" id="btnImportPool">导入到候选池</button>
+              <label class="btn btn-ghost file-btn">
+                选择文件
+                <input type="file" id="poolFile" hidden />
+              </label>
+            </div>
+            <p class="hint">兼容 ADDAPI 文本、CSV、域名、IP:PORT、订阅 URL</p>
+          </div>
+
+          <div class="card">
+            <div class="card-label">自动发现</div>
+            <label class="field">
+              <span>GitHub 搜索关键词</span>
+              <input class="input" id="ghQuery" value="filename:addressesapi.txt" />
+            </label>
+            <div class="row">
+              <button class="btn btn-primary" id="btnSearchGh">搜索候选</button>
+              <button class="btn btn-ghost" id="btnSubs">拉取订阅源</button>
+            </div>
+            <div class="chips" id="poolStats">
+              <span class="chip">候选 0</span>
+              <span class="chip">已测 0</span>
+              <span class="chip">入榜 0</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-label">发现结果</div>
+          <div class="table-wrap">
+            <table class="table" id="poolTable">
+              <thead>
+                <tr><th>地址</th><th>端口</th><th>来源</th><th>备注</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- FILTER -->
+      <section class="page" id="page-filter">
+        <header class="page-head">
+          <div>
+            <h1>筛选评分</h1>
+            <p class="lead">拖动调整权重，速度是硬性门槛</p>
+          </div>
+          <button class="btn btn-primary" id="btnSaveFilter">保存设置</button>
+        </header>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-label">评分权重</div>
+            <div class="slider-row" data-key="speed">
+              <div class="slider-head"><span>速度</span><b>0.17</b></div>
+              <input type="range" min="0" max="1" step="0.01" value="0.17" />
+            </div>
+            <div class="slider-row" data-key="purity">
+              <div class="slider-head"><span>纯净度</span><b>0.15</b></div>
+              <input type="range" min="0" max="1" step="0.01" value="0.15" />
+            </div>
+            <div class="slider-row" data-key="stability">
+              <div class="slider-head"><span>稳定性</span><b>0.15</b></div>
+              <input type="range" min="0" max="1" step="0.01" value="0.15" />
+            </div>
+            <div class="slider-row" data-key="latency">
+              <div class="slider-head"><span>延迟</span><b>0.17</b></div>
+              <input type="range" min="0" max="1" step="0.01" value="0.17" />
+            </div>
+            <div class="slider-row" data-key="compatibility">
+              <div class="slider-head"><span>兼容性</span><b>0.25</b></div>
+              <input type="range" min="0" max="1" step="0.01" value="0.25" />
+            </div>
+            <div class="slider-row" data-key="loss">
+              <div class="slider-head"><span>丢包</span><b>0.11</b></div>
+              <input type="range" min="0" max="1" step="0.01" value="0.11" />
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-label">硬性门槛</div>
+            <label class="field">
+              <span>最小速度 (MB/s)</span>
+              <input class="input" id="minSpeed" type="number" step="0.1" value="0.5" />
+            </label>
+            <label class="field">
+              <span>最大延迟 (ms)</span>
+              <input class="input" id="maxLatency" type="number" value="800" />
+            </label>
+            <label class="field">
+              <span>最大风险（纯净度）</span>
+              <input class="input" id="maxRisk" type="number" value="50" />
+            </label>
+
+            <div class="card-label" style="margin-top:20px">国家 / 地区</div>
+            <div class="chip-select" id="countryChips">
+              <button class="chip-toggle active" data-v="">全部</button>
+              <button class="chip-toggle" data-v="US">美国</button>
+              <button class="chip-toggle" data-v="JP">日本</button>
+              <button class="chip-toggle" data-v="SG">新加坡</button>
+              <button class="chip-toggle" data-v="HK">香港</button>
+              <button class="chip-toggle" data-v="KR">韩国</button>
+              <button class="chip-toggle" data-v="DE">德国</button>
+              <button class="chip-toggle" data-v="CA">加拿大</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-label">导出备注模板</div>
+          <input class="input" id="remarkTpl" value="speed-purity-stability-country" />
+          <div class="preview" id="remarkPreview">104.17.29.227:8443#3.9-1.00-1.00-美国</div>
+          <p class="hint">可用字段：{speed} {purity} {stability} {country}</p>
+        </div>
+      </section>
+
+      <!-- KEYS -->
+      <section class="page" id="page-keys">
+        <header class="page-head">
+          <div>
+            <h1>密钥与仓库</h1>
+            <p class="lead">只存本机 .env。一键直达注册页，粘贴即可</p>
+          </div>
+          <button class="btn btn-primary" id="btnSaveKeys">保存</button>
+        </header>
+
+        <div class="card">
+          <div class="card-label">GitHub</div>
+          <div class="key-row">
+            <div class="key-meta">
+              <div class="key-name">GITHUB_TOKEN</div>
+              <div class="key-desc">用于搜索候选源、推送 public 分支</div>
+            </div>
+            <input class="input key-input" id="keyGithub" type="password" placeholder="ghp_… 或 github_pat_…" />
+            <a class="btn btn-ghost" href="https://github.com/settings/tokens/new?scopes=public_repo&description=NodeBench"
+               target="_blank" rel="noreferrer">创建 Token ↗</a>
+          </div>
+          <div class="row" style="margin-top:14px">
+            <button class="btn btn-primary" id="btnCreateRepo">一键创建公开仓库</button>
+            <input class="input" id="repoName" value="cf-ip-pool" style="max-width:220px" />
+          </div>
+          <div class="repo-result" id="repoResult"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-label">纯净度</div>
+          <div class="key-row">
+            <div class="key-meta">
+              <div class="key-name">ABUSEIPDB_KEY</div>
+              <div class="key-desc">滥用投诉分 → 纯净度</div>
+            </div>
+            <input class="input key-input" id="keyAbuse" type="password" placeholder="80 位密钥" />
+            <a class="btn btn-ghost" href="https://www.abuseipdb.com/account/api/keys"
+               target="_blank" rel="noreferrer">获取 Key ↗</a>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-label">属地</div>
+          <div class="key-row">
+            <div class="key-meta">
+              <div class="key-name">IPINFO_TOKEN</div>
+              <div class="key-desc">更准的城市 / 国家 / ASN</div>
+            </div>
+            <input class="input key-input" id="keyIpinfo" type="password" placeholder="如 760eddc…" />
+            <a class="btn btn-ghost" href="https://ipinfo.io/dashboard"
+               target="_blank" rel="noreferrer">获取 Token ↗</a>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-label">已识别本机 .env</div>
+          <div class="env-detect" id="envDetect">读取中…</div>
+        </div>
+      </section>
+
+      <!-- RESULT -->
+      <section class="page" id="page-result">
+        <header class="page-head">
+          <div>
+            <h1>结果</h1>
+            <p class="lead">入榜节点 · 速度-纯净度-稳定性-国家</p>
+          </div>
+          <div class="row">
+            <button class="btn btn-ghost" id="btnRefreshResult">刷新</button>
+            <button class="btn btn-primary" id="btnOpenOutput">打开目录</button>
+          </div>
+        </header>
+
+        <div class="stats" id="resultStats">
+          <div class="stat"><div class="stat-n">—</div><div class="stat-l">入榜</div></div>
+          <div class="stat"><div class="stat-n">—</div><div class="stat-l">平均速度</div></div>
+          <div class="stat"><div class="stat-n">—</div><div class="stat-l">最快</div></div>
+          <div class="stat"><div class="stat-n">—</div><div class="stat-l">国家数</div></div>
+        </div>
+
+        <div class="card">
+          <div class="table-wrap">
+            <table class="table" id="resultTable">
+              <thead>
+                <tr>
+                  <th>#</th><th>节点</th><th>速度</th><th>纯净度</th>
+                  <th>稳定性</th><th>国家</th><th>综合分</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- First-run wizard -->
+  <div class="modal" id="wizard" hidden>
+    <div class="modal-card">
+      <div class="wizard-progress"><span id="wizBar"></span></div>
+      <h2 id="wizTitle">开始使用</h2>
+      <div id="wizBody"></div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" id="wizSkip">稍后再说</button>
+        <button class="btn btn-primary" id="wizNext">下一步</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" hidden></div>
+  <script src="app.js"></script>
+</body>
+</html>
