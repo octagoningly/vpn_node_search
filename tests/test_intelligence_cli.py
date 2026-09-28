@@ -95,6 +95,10 @@ def test_inspect_reports_unknown_when_services_unconfigured(
 ):
     make_run_artifacts(tmp_path)
     monkeypatch.chdir(PROJECT_ROOT)
+    # Force services unconfigured regardless of shipped defaults.
+    monkeypatch.setenv("NODEBENCH_INTELLIGENCE__ECHO_URL", "")
+    monkeypatch.setenv("NODEBENCH_INTELLIGENCE__GEO_URL", "")
+    monkeypatch.setenv("NODEBENCH_INTELLIGENCE__REPUTATION_URL", "")
     code = main(
         ["inspect", "--run-id", RUN_ID, "--output-dir", str(tmp_path)]
     )
