@@ -9,9 +9,9 @@ from nodebench.core.context import redact
 from nodebench.core.schema import RawItem, SourceReport
 from nodebench.sources.base import CollectOutcome, make_error, resolve_base_dir
 from nodebench.sources.cf import collect_cf
+from nodebench.sources.github import collect_github
 from nodebench.sources.local import collect_local
-
-PENDING_SOURCES = ("subscriptions", "github")
+from nodebench.sources.subscriptions import collect_subscriptions
 
 
 def _failed_report(source_id: str, code: str, message: str) -> SourceReport:
@@ -65,16 +65,25 @@ def collect_all(
             items,
             reports,
         )
-    for name in PENDING_SOURCES:
-        if getattr(config.sources, name).enabled:
-            reports.append(
-                _failed_report(
-                    name,
-                    "adapter_unavailable",
-                    f"{name} source is enabled but its adapter is not implemented yet",
-                )
-            )
+    if config.sources.subscriptions.enabled:
+        _run_adapter(
+            "subscriptions",
+            lambda: collect_subscriptions(config.sources.subscriptions, base),
+            items,
+            reports,
+        )
+    if config.sources.github.enabled:
+        _run_adapter(
+            "github",
+            lambda: collect_github(
+                config.sources.github,
+                base,
+                secrets=dict(config.secrets) if config.secrets else None,
+            ),
+            items,
+            reports,
+        )
     return CollectOutcome(items=items, reports=reports)
 
 
-__all__ = ["PENDING_SOURCES", "collect_all"]
+__all__ = ["collect_all"]

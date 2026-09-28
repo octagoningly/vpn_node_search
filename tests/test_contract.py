@@ -134,6 +134,9 @@ def test_source_reports_and_errors_shape(result: dict):
             "errors",
             "scope",
             "redacted",
+            "mode",
+            "etag",
+            "last_modified",
         }
         assert isinstance(report["ok"], bool)
         for error in report["errors"]:

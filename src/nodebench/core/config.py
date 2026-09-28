@@ -45,6 +45,16 @@ class SubscriptionSourceConfig(BaseModel):
 
     enabled: bool = False
     urls: list[str] = Field(default_factory=list)
+    timeout_s: float = 15.0
+    user_agent: str = "NodeBench/0.1 (+https://github.com/local/nodebench; bounded-research)"
+    offline: bool = False
+
+    @field_validator("timeout_s")
+    @classmethod
+    def _positive_timeout(cls, value: float) -> float:
+        if float(value) <= 0:
+            raise ValueError("must be greater than zero")
+        return float(value)
 
 
 class GithubSourceConfig(BaseModel):
@@ -55,6 +65,23 @@ class GithubSourceConfig(BaseModel):
     queries: list[str] = Field(default_factory=list)
     max_files_per_run: int = 30
     cache_ttl_hours: int = 24
+    timeout_s: float = 15.0
+    user_agent: str = "NodeBench/0.1 (+https://github.com/local/nodebench; bounded-research)"
+    offline: bool = False
+
+    @field_validator("timeout_s")
+    @classmethod
+    def _positive_timeout(cls, value: float) -> float:
+        if float(value) <= 0:
+            raise ValueError("must be greater than zero")
+        return float(value)
+
+    @field_validator("max_files_per_run", "cache_ttl_hours")
+    @classmethod
+    def _non_negative_counter(cls, value: int) -> int:
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise ValueError("must be a non-negative integer")
+        return value
 
 
 class CfSourceConfig(BaseModel):
@@ -151,6 +178,17 @@ class IntelligenceConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     reputation_enabled: bool = False
+    echo_url: str = ""
+    geo_url: str = ""
+    reputation_url: str = ""
+    timeout: float = 5.0
+
+    @field_validator("timeout")
+    @classmethod
+    def _positive_timeout(cls, value: float) -> float:
+        if float(value) <= 0:
+            raise ValueError("must be greater than zero")
+        return float(value)
 
 
 class HistoryConfig(BaseModel):

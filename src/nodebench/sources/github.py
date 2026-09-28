@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-import re
+import hashlib
+import json
+import os
+import time
+import urllib.parse
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -9,21 +13,24 @@ from nodebench.core.config import GithubSourceConfig
 from nodebench.core.schema import ErrorInfo, RawItem, SourceReport
 from nodebench.sources.base import (
     MAX_SOURCE_FILE_BYTES,
-    MAX_SOURCE_FILES,
-    MIN_BASE64_LENGTH,
-    BOM,
+    CollectOutcome,
+    content_type_for,
+    make_error,
 )
-from nodebench.sources.local import collect_local
-from nodebench.sources.base import content_type_for, make_error
+from nodebench.sources.http_utils import (
+    DEFAULT_USER_AGENT,
+    HttpError,
+    controlled_get,
+    is_private_host,
+    offline_requested,
+)
 
 SOURCE_ID = "github"
 LICENSE_TAG = "unknown"
 
-# GitHub search API 速率限制与 SSRF 保护
 GITHUB_API_BASE = "https://api.github.com/search/code"
 GITHUB_SEARCH_URL = "https://github.com/search/"
 
-# 禁止的域名前缀（防止内网/本地探测）
 BLOCKED_DOMAINS = (
     "127.0.0.1",
     "localhost",
@@ -34,27 +41,39 @@ BLOCKED_DOMAINS = (
     "169.254.",
 )
 
+MODE_REAL = "real"
+MODE_OFFLINE = "offline"
+CACHE_DIR_NAME = "cache"
+GITHUB_CACHE_NAMESPACE = "github"
+
 
 def _is_blocked_domain(host: str) -> bool:
     """Check whether the host matches a blocked domain pattern."""
-    host = host.lower().strip()
+    name = (host or "").lower().strip()
     for prefix in BLOCKED_DOMAINS:
-        if host.startswith(prefix):
+        if name.startswith(prefix):
+            return True
+    return is_private_host(name)
+
+
+def _repo_is_allowed(repo: str, allowed: list[str]) -> bool:
+    if not allowed:
+        return False
+    cleaned = repo.strip().lower()
+    for entry in allowed:
+        if cleaned == entry.strip().lower():
             return True
     return False
 
 
-def _simulate_github_search(query: str, max_files: int = 50) -> list[dict[str, Any]]:
-    """Offline模拟 GitHub 搜索结果。
+def _sanitize_repo_ref(repo: str) -> str:
+    return repo.strip().lower()
 
-    返回假的搜索结果列表，每项包含 filename, repository, content_type 等。
-    仅用于测试结构与流程，不进行真实网络请求。
-    """
-    # 简单的关键词匹配，模拟搜索结果
+
+def _simulate_github_search(query: str, max_files: int = 50) -> list[dict[str, Any]]:
+    """Offline模拟 GitHub 搜索结果。"""
     results: list[dict[str, Any]] = []
     lowered = query.lower()
-
-    # 模拟几条结果用于测试
     sample_results = [
         {
             "filename": "nodes.txt",
@@ -65,7 +84,7 @@ def _simulate_github_search(query: str, max_files: int = 50) -> list[dict[str, A
         {
             "filename": "subscriptions.yaml",
             "repository": "org/project-b",
-            "content_type": "yaml_sub",
+            "content_type": "yaml",
             "size": 1024,
         },
         {
@@ -75,103 +94,408 @@ def _simulate_github_search(query: str, max_files: int = 50) -> list[dict[str, A
             "size": 512,
         },
     ]
-
     for item in sample_results:
-        # Basic keyword filter
-        if lowered and not any(kw in lowered for kw in ["vless", "vmess", "trojan", "shadow"]):
+        if lowered and not any(
+            kw in lowered for kw in ["vless", "vmess", "trojan", "shadow", "filename"]
+        ):
             continue
-        # Respect max_files limit
         if len(results) >= max_files:
             break
         results.append(item)
-
     return results
 
 
+def _cache_path(base: Path, key: str) -> Path:
+    digest = hashlib.sha256(key.encode("utf-8")).hexdigest()[:32]
+    return base / "output" / CACHE_DIR_NAME / GITHUB_CACHE_NAMESPACE / f"{digest}.json"
+
+
+def _load_cache(path: Path, ttl_hours: int) -> dict[str, Any] | None:
+    if ttl_hours <= 0 or not path.is_file():
+        return None
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(raw, dict):
+        return None
+    saved_at = raw.get("saved_at")
+    if not isinstance(saved_at, str):
+        return None
+    try:
+        moment = datetime.fromisoformat(saved_at.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    age = datetime.now(timezone.utc) - moment
+    if age.total_seconds() > ttl_hours * 3600:
+        return None
+    return raw
+
+
+def _save_cache(path: Path, payload: dict[str, Any]) -> None:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        payload = dict(payload)
+        payload["saved_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _resolve_token() -> str:
+    token = os.environ.get("GITHUB_TOKEN", "").strip()
+    if token:
+        return token
+    return ""
+
+
+def _github_headers(token: str) -> dict[str, str]:
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
+
+
+def _search_url(query: str) -> str:
+    return f"{GITHUB_API_BASE}?q={urllib.parse.quote(query)}&per_page=20"
+
+
+def _extract_rate_limit(error: HttpError) -> tuple[int | None, float | None]:
+    headers = error.headers or {}
+    remaining: int | None = None
+    raw_remaining = headers.get("x-ratelimit-remaining") or headers.get("X-RateLimit-Remaining")
+    if raw_remaining is not None:
+        try:
+            remaining = int(str(raw_remaining).strip())
+        except ValueError:
+            remaining = None
+    retry_after: float | None = None
+    raw_retry = headers.get("retry-after") or headers.get("Retry-After")
+    if raw_retry is not None:
+        try:
+            retry_after = max(0.0, float(str(raw_retry).strip()))
+        except ValueError:
+            retry_after = None
+    return remaining, retry_after
+
+
+def _real_github_search(
+    query: str,
+    config: GithubSourceConfig,
+    token: str,
+) -> tuple[list[dict[str, Any]], ErrorInfo | None]:
+    url = _search_url(query)
+    headers = _github_headers(token)
+    try:
+        response = controlled_get(
+            url,
+            timeout_s=config.timeout_s,
+            max_bytes=MAX_SOURCE_FILE_BYTES,
+            user_agent=config.user_agent or DEFAULT_USER_AGENT,
+            headers=headers,
+        )
+    except HttpError as err:
+        remaining, retry_after = _extract_rate_limit(err)
+        if err.status in (403, 429) or (remaining is not None and remaining <= 0):
+            wait = retry_after if retry_after is not None else 0.0
+            return [], make_error(
+                "rate_limited",
+                f"GitHub search rate limited (retry_after={wait})",
+                retryable=True,
+            )
+        return [], make_error(
+            "fetch_failed" if err.retryable else "search_failed",
+            f"GitHub search failed: {err.message}",
+            retryable=err.retryable,
+        )
+
+    if response.rate_limit_remaining is not None and response.rate_limit_remaining <= 0:
+        wait = response.retry_after if response.retry_after is not None else 0.0
+        return [], make_error(
+            "rate_limited",
+            f"GitHub search rate limited (retry_after={wait})",
+            retryable=True,
+        )
+
+    try:
+        payload = json.loads(response.text)
+    except ValueError as err:
+        return [], make_error("search_invalid_json", f"GitHub search returned invalid JSON: {err}")
+
+    items = payload.get("items") if isinstance(payload, dict) else None
+    if not isinstance(items, list):
+        return [], make_error("search_invalid_shape", "GitHub search response missing items")
+    results: list[dict[str, Any]] = []
+    for entry in items:
+        if not isinstance(entry, dict):
+            continue
+        repo_obj = entry.get("repository") if isinstance(entry.get("repository"), dict) else {}
+        full_name = str(repo_obj.get("full_name") or entry.get("repository") or "")
+        filename = str(entry.get("name") or entry.get("path") or "")
+        size = int(entry.get("size") or 0)
+        content_url = str(entry.get("url") or "")
+        results.append(
+            {
+                "filename": filename,
+                "repository": full_name,
+                "size": size,
+                "content_url": content_url,
+                "content_type": "",
+            }
+        )
+    return results, None
+
+
+def _fetch_file_text(
+    content_url: str,
+    config: GithubSourceConfig,
+    token: str,
+) -> tuple[str | None, ErrorInfo | None]:
+    if not content_url:
+        return None, make_error("missing_content_url", "search hit has no content URL")
+    headers = _github_headers(token)
+    try:
+        response = controlled_get(
+            content_url,
+            timeout_s=config.timeout_s,
+            max_bytes=MAX_SOURCE_FILE_BYTES,
+            user_agent=config.user_agent or DEFAULT_USER_AGENT,
+            headers=headers,
+        )
+    except HttpError as err:
+        return None, make_error(
+            "fetch_failed",
+            f"failed to fetch file content: {err.message}",
+            retryable=err.retryable,
+        )
+    try:
+        payload = json.loads(response.text)
+    except ValueError:
+        return response.text, None
+    if isinstance(payload, dict):
+        encoding = str(payload.get("encoding") or "")
+        if encoding == "base64":
+            import base64
+
+            raw = payload.get("content") or ""
+            try:
+                return base64.b64decode(raw).decode("utf-8", errors="replace"), None
+            except (ValueError, TypeError):
+                return None, make_error("decode_failed", "failed to decode base64 file content")
+        if "content" in payload and isinstance(payload.get("content"), str):
+            return str(payload["content"]), None
+    return response.text, None
+
+
 def collect_github(
-    config: GithubSourceConfig, base_dir: Path | None = None
+    config: GithubSourceConfig, base_dir: Path | None = None, secrets: dict[str, str] | None = None
 ) -> CollectOutcome:
-    """采集 GitHub 代码搜索来源。
+    """采集 GitHub 代码搜索来源（真实 API 或离线模拟）。
 
-    1. 检查启用状态
-    2. 对每个查询进行 GitHub 搜索（离线模拟）
-    3. 过滤结果：仅保留允许的仓库、文件类型在限制内
-    4. 记录 ETag/Last-Modified 与获取时间
-    5. 返回 CollectOutcome，包含 items 与 reports
-
-    SSRF 限制：搜索查询中的仓库/域名不得解析为内网/本地地址。
+    真实模式：api.github.com/search/code + Bearer token。
+    离线模式：NODEBENCH_OFFLINE=1、配置 offline、无 token 或网络失败时降级，
+    并在 SourceReport.mode 中标注 mode=offline，不假装真实。
     """
     if not config.enabled:
         return CollectOutcome()
 
-    # SSRF check on allowed repositories
-    for repo in config.allowed_repositories:
-        # Extract host from repo string like "org/repo" or "http(s)://..."
-        if ":" in repo:
-            host = repo.split(":")[0]
-        else:
-            host = repo
-        if _is_blocked_domain(host):
-            # Report as blocked rather than crashing
-            pass
-
     base = Path(base_dir) if base_dir is not None else Path.cwd()
-    outcomes: list[SourceReport] = []
-    items: list[RawItem] = []
     fetched_at = datetime.now(timezone.utc)
+    items: list[RawItem] = []
+    reports: list[SourceReport] = []
 
+    token = _resolve_token()
+    if secrets:
+        token = token or str(secrets.get("github_token") or "").strip()
+
+    want_offline = bool(config.offline) or offline_requested()
+    force_offline = want_offline or not token
+
+    if force_offline and not want_offline and not token:
+        reports.append(
+            SourceReport(
+                source_id=SOURCE_ID,
+                ok=False,
+                fetched=0,
+                errors=[
+                    make_error(
+                        "missing_token",
+                        "GITHUB_TOKEN is not set; degrading to offline simulation",
+                        retryable=True,
+                    )
+                ],
+                scope="; ".join(config.queries),
+                mode=MODE_OFFLINE,
+            )
+        )
+    elif want_offline:
+        reports.append(
+            SourceReport(
+                source_id=SOURCE_ID,
+                ok=True,
+                fetched=0,
+                errors=[
+                    make_error(
+                        "offline_mode",
+                        "offline mode requested; using simulated search results",
+                        retryable=False,
+                    )
+                ],
+                scope="; ".join(config.queries),
+                mode=MODE_OFFLINE,
+            )
+        )
+
+    used_offline = force_offline
     total_items = 0
+    rate_limited = False
 
     for query in config.queries:
-        # Simulated search
-        results = _simulate_github_search(query, max_files=config.max_files_per_run)
+        query = query.strip()
+        if not query:
+            continue
 
+        results: list[dict[str, Any]] = []
+        query_error: ErrorInfo | None = None
+        mode = MODE_OFFLINE if used_offline else MODE_REAL
+
+        if not used_offline:
+            cache_file = _cache_path(base, f"{query}|{','.join(config.allowed_repositories)}")
+            cached = _load_cache(cache_file, config.cache_ttl_hours)
+            if cached and isinstance(cached.get("results"), list):
+                results = list(cached["results"])
+            else:
+                real_results, query_error = _real_github_search(query, config, token)
+                if query_error is None:
+                    results = real_results
+                    _save_cache(cache_file, {"query": query, "results": results})
+                elif query_error.code == "rate_limited":
+                    rate_limited = True
+                    used_offline = False
+                else:
+                    # network/API failure → offline degradation
+                    used_offline = True
+                    mode = MODE_OFFLINE
+                    results = _simulate_github_search(query, max_files=config.max_files_per_run)
+                    reports.append(
+                        SourceReport(
+                            source_id=SOURCE_ID,
+                            ok=False,
+                            fetched=0,
+                            errors=[
+                                query_error,
+                                make_error(
+                                    "offline_fallback",
+                                    "network failure; falling back to offline simulation",
+                                    retryable=True,
+                                ),
+                            ],
+                            scope=query,
+                            mode=MODE_OFFLINE,
+                        )
+                    )
+
+        if used_offline and not results and query_error is None:
+            results = _simulate_github_search(query, max_files=config.max_files_per_run)
+            mode = MODE_OFFLINE
+
+        query_items = 0
         for res in results:
-            # Further filter by allowed repositories
-            if res["repository"] not in config.allowed_repositories:
+            if total_items >= config.max_files_per_run:
+                break
+            repo = str(res.get("repository") or "")
+            if not _repo_is_allowed(repo, config.allowed_repositories):
+                continue
+            host_candidate = repo.split("/")[0] if "/" in repo else repo
+            if _is_blocked_domain(host_candidate):
                 continue
 
-            # Content type detection
-            content_type = res.get("content_type", "uri_list")
-            if content_type not in {"uri_list", "yaml_sub", "csv"}:
-                content_type = content_type_for("dummy." + content_type)
+            filename = str(res.get("filename") or "")
+            content_url = str(res.get("content_url") or "")
+            text: str | None = None
+            if not used_offline and content_url:
+                text, fetch_err = _fetch_file_text(content_url, config, token)
+                if fetch_err is not None and text is None:
+                    continue
+            if text is None:
+                text = filename or ""
 
-            # Create RawItem
+            ctype = res.get("content_type") or ""
+            if ctype in {"uri_list", "base64_sub", "yaml", "csv", "text"}:
+                content_type = ctype
+            else:
+                content_type = content_type_for(Path(filename or "item.txt"), text)
+
             item = RawItem(
                 source_id=SOURCE_ID,
                 content_type=content_type,
-                payload=res.get("filename", ""),
+                payload=text,
                 fetched_at=fetched_at,
                 license_tag=LICENSE_TAG,
-                source_ref=res.get("repository", ""),
+                source_ref=f"{repo}/{filename}" if repo else filename,
             )
             items.append(item)
+            query_items += 1
             total_items += 1
 
-        # Report per query
-        report = SourceReport(
-            source_id=SOURCE_ID,
-            ok=total_items > 0,
-            fetched=total_items,
-            errors=[],
-            scope="; ".join(config.queries),
-            etag='"gh-search"',
-            last_modified=datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S GMT"),
-        )
-        outcomes.append(report)
+        if rate_limited:
+            report = SourceReport(
+                source_id=SOURCE_ID,
+                ok=False,
+                fetched=query_items,
+                errors=[
+                    make_error(
+                        "rate_limited",
+                        "GitHub API rate limited; obeying Retry-After",
+                        retryable=True,
+                    )
+                ],
+                scope=query,
+                mode=MODE_REAL,
+            )
+        elif used_offline and query_error is not None:
+            # already reported above
+            report = None
+        else:
+            errors: list[ErrorInfo] = []
+            if query_error is not None:
+                errors.append(query_error)
+            report = SourceReport(
+                source_id=SOURCE_ID,
+                ok=query_items > 0 or not errors,
+                fetched=query_items,
+                errors=errors,
+                scope=query,
+                mode=mode,
+            )
+        if report is not None:
+            reports.append(report)
 
-    # If no queries configured but source enabled, allow offline sample run
     if not config.queries:
-        report = SourceReport(
-            source_id=SOURCE_ID,
-            ok=True,
-            fetched=0,
-            errors=[],
-            scope="",
+        reports.append(
+            SourceReport(
+                source_id=SOURCE_ID,
+                ok=True,
+                fetched=0,
+                errors=[],
+                scope="",
+                mode=MODE_OFFLINE if used_offline else MODE_REAL,
+            )
         )
-        outcomes.append(report)
 
-    return CollectOutcome(items=items, reports=outcomes)
+    return CollectOutcome(items=items, reports=reports)
 
 
-__all__ = ["SOURCE_ID", "LICENSE_TAG", "collect_github"]
+__all__ = [
+    "SOURCE_ID",
+    "LICENSE_TAG",
+    "BLOCKED_DOMAINS",
+    "MODE_REAL",
+    "MODE_OFFLINE",
+    "collect_github",
+    "_is_blocked_domain",
+    "_simulate_github_search",
+]
