@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ipaddress
 import math
+import socket
 from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime
 from typing import Any
@@ -133,20 +134,36 @@ def make_geo_lookup(
 
     def _lookup(address: str) -> GeoResult | None:
         text = str(address or "").strip()
-        if not text or not _is_ip(text):
+        if not text:
             return None
-        if text in cache:
-            return cache[text]
+        ip = text if _is_ip(text) else None
+        if ip is None:
+            # Resolve hostnames so domain candidates get country codes too.
+            try:
+                infos = socket.getaddrinfo(
+                    text, None, socket.AF_UNSPEC, socket.SOCK_STREAM
+                )
+                for info in infos:
+                    candidate = str(info[4][0] or "").strip()
+                    if candidate and _is_ip(candidate):
+                        ip = candidate
+                        break
+            except OSError:
+                ip = None
+        if ip is None:
+            return None
+        if ip in cache:
+            return cache[ip]
         if not root:
             return None
         if len(cache) >= max_cache:
             # Drop oldest insertion to keep memory bounded.
             cache.pop(next(iter(cache)), None)
         try:
-            result = resolve(text, root, float(timeout))
+            result = resolve(ip, root, float(timeout))
         except GeoLookupError:
             result = None
-        cache[text] = result
+        cache[ip] = result
         return result
 
     return _lookup
@@ -453,12 +470,7 @@ def _score_endpoint(
     geo: GeoResult | None = None
     # Only geo-lookup candidates that can actually rank: avoids rate-limit
     # storms on thousands of never-probed endpoints.
-    if (
-        country is None
-        and outcome == "ok"
-        and geo_lookup is not None
-        and _is_ip(edge.address)
-    ):
+    if country is None and outcome == "ok" and geo_lookup is not None:
         geo = geo_lookup(edge.address)
         if geo is not None:
             resolved = _country_code(geo.country_code)

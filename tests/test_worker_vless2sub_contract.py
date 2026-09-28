@@ -165,7 +165,7 @@ def test_addapi_score_summary_remark_matches_line_pattern_and_parses_back():
             speed_mb_s=3.8, purity=0.80, stability=0.65, country_code="JP"
         ),
     ]
-    assert remarks == ["4.6-0.85-0.72-SG", "3.8-0.80-0.65-JP"]
+    assert remarks == ["4.6-0.85-0.72-新加坡", "3.8-0.80-0.65-日本"]
     text = build_addapi(
         [
             ("104.17.29.227", 8443, remarks[0]),
@@ -174,8 +174,8 @@ def test_addapi_score_summary_remark_matches_line_pattern_and_parses_back():
         ]
     )
     lines = text.splitlines()
-    assert lines[0] == "104.17.29.227:8443#4.6-0.85-0.72-SG"
-    assert lines[1] == "139.162.41.109:443#3.8-0.80-0.65-JP"
+    assert lines[0] == "104.17.29.227:8443#4.6-0.85-0.72-新加坡"
+    assert lines[1] == "139.162.41.109:443#3.8-0.80-0.65-日本"
     assert lines[2] == "[2001:db8::7]:80#1.0-------??"
     for line in lines:
         match = ADDAPI_LINE_PATTERN.match(line)
@@ -184,8 +184,8 @@ def test_addapi_score_summary_remark_matches_line_pattern_and_parses_back():
 
     endpoints, issues = parse_endpoint_lines("\n".join(lines) + "\n", SRC)
     assert issues == []
-    assert endpoints[0].remarks == "4.6-0.85-0.72-SG"
-    assert endpoints[1].remarks == "3.8-0.80-0.65-JP"
+    assert endpoints[0].remarks == "4.6-0.85-0.72-新加坡"
+    assert endpoints[1].remarks == "3.8-0.80-0.65-日本"
 
 
 def test_addapi_score_summary_placeholder_template_and_unknowns():
@@ -201,7 +201,7 @@ def test_addapi_score_summary_placeholder_template_and_unknowns():
             country_code="SG",
             template="{speed}-{purity}-{stability}-{country}",
         )
-        == "4.6-0.85-0.72-SG"
+        == "4.6-0.85-0.72-新加坡"
     )
     assert format_addapi_remark(speed_mb_s=2.0) == "2.0-------??"
     assert (

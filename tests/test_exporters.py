@@ -504,11 +504,11 @@ def test_format_addapi_remark_default_template_matches_v2rayn_sample():
     remark = format_addapi_remark(
         speed_mb_s=4.6, purity=0.85, stability=0.72, country_code="SG"
     )
-    assert remark == "4.6-0.85-0.72-SG"
+    assert remark == "4.6-0.85-0.72-新加坡"
     remark = format_addapi_remark(
         speed_mb_s=3.8, purity=0.80, stability=0.65, country_code="JP"
     )
-    assert remark == "3.8-0.80-0.65-JP"
+    assert remark == "3.8-0.80-0.65-日本"
 
 
 def test_format_addapi_remark_placeholder_template_is_customizable():
@@ -519,7 +519,7 @@ def test_format_addapi_remark_placeholder_template_is_customizable():
         country_code="SG",
         template="{country}:{speed}/{purity}/{stability}",
     )
-    assert remark == "SG:4.6/0.85/0.72"
+    assert remark == "新加坡:4.6/0.85/0.72"
     remark = format_addapi_remark(
         speed_mb_s=4.6,
         purity=0.85,
@@ -527,7 +527,7 @@ def test_format_addapi_remark_placeholder_template_is_customizable():
         country_code="SG",
         template="{speed}-{purity}-{country}",
     )
-    assert remark == "4.6-0.85-SG"
+    assert remark == "4.6-0.85-新加坡"
 
 
 def test_format_addapi_remark_missing_scores_use_dashes_and_unknown_country():
@@ -547,12 +547,12 @@ def test_format_addapi_remark_normalizes_0_100_scores_to_0_1():
         stability=72.0,
         country_code="jp",
     )
-    assert remark == "11.6-0.85-0.72-JP"
+    assert remark == "11.6-0.85-0.72-日本"
 
 
 def test_format_addapi_remark_speed_keeps_one_decimal():
     assert format_addapi_remark(speed_mb_s=11.59, purity=1, stability=1, country_code="US") == (
-        "11.6-1.00-1.00-US"
+        "11.6-1.00-1.00-美国"
     )
     assert format_addapi_remark(speed_mb_s=0.05, purity=0, stability=0, country_code="") == (
         "0.1-0.00-0.00-??"
@@ -566,7 +566,7 @@ def test_addapi_remark_from_ranked_uses_score_breakdown_then_risk_and_availabili
         country_code="SG",
         availability_rate=0.99,
     )
-    assert addapi_remark_from_ranked(ranked) == "4.6-0.85-0.72-SG"
+    assert addapi_remark_from_ranked(ranked) == "4.6-0.85-0.72-新加坡"
 
     ranked = make_ranked_endpoint(
         speed_mb_s=3.8,
@@ -574,7 +574,7 @@ def test_addapi_remark_from_ranked_uses_score_breakdown_then_risk_and_availabili
         availability_rate=0.65,
         country_code="JP",
     )
-    assert addapi_remark_from_ranked(ranked) == "3.8-0.80-0.65-JP"
+    assert addapi_remark_from_ranked(ranked) == "3.8-0.80-0.65-日本"
 
     ranked = make_ranked_endpoint(speed_mb_s=8.0)
     assert addapi_remark_from_ranked(ranked) == "8.0-------??"
@@ -606,7 +606,7 @@ def test_build_export_addapi_lines_carry_score_summary_remark(tmp_path: Path):
     )
     assert outcome.status == "ok"
     text = (out / CF_ADDAPI_NAME).read_text(encoding="utf-8")
-    assert text.splitlines() == ["104.17.29.227:8443#4.6-0.85-0.72-SG"]
+    assert text.splitlines() == ["104.17.29.227:8443#4.6-0.85-0.72-新加坡"]
 
 
 def test_build_export_addapi_remark_template_is_configurable(tmp_path: Path):
@@ -628,7 +628,7 @@ def test_build_export_addapi_remark_template_is_configurable(tmp_path: Path):
         addapi_remark_template="{country}-{speed}",
     )
     text = (out / CF_ADDAPI_NAME).read_text(encoding="utf-8")
-    assert text.splitlines() == ["198.51.100.7:443#SG-4.6"]
+    assert text.splitlines() == ["198.51.100.7:443#新加坡-4.6"]
 
 
 def test_build_addcsv_writes_full_header_and_formats():

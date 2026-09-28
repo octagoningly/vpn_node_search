@@ -57,12 +57,69 @@ def format_score(value: Any, *, digits: int = 2, scale_01: bool = False) -> str:
     return "{0:.{1}f}".format(number, digits)
 
 
+# Compact Chinese labels for v2rayN remarks (two-char ISO is too terse).
+_COUNTRY_ZH = {
+    "CN": "中国",
+    "HK": "香港",
+    "TW": "台湾",
+    "MO": "澳门",
+    "JP": "日本",
+    "KR": "韩国",
+    "SG": "新加坡",
+    "US": "美国",
+    "CA": "加拿大",
+    "GB": "英国",
+    "UK": "英国",
+    "DE": "德国",
+    "FR": "法国",
+    "NL": "荷兰",
+    "RU": "俄罗斯",
+    "IN": "印度",
+    "AU": "澳大利亚",
+    "BR": "巴西",
+    "VN": "越南",
+    "TH": "泰国",
+    "MY": "马来西亚",
+    "PH": "菲律宾",
+    "ID": "印尼",
+    "TR": "土耳其",
+    "UA": "乌克兰",
+    "CH": "瑞士",
+    "SE": "瑞典",
+    "FI": "芬兰",
+    "PL": "波兰",
+    "IT": "意大利",
+    "ES": "西班牙",
+    "LV": "拉脱维亚",
+    "AR": "阿根廷",
+    "MX": "墨西哥",
+    "ZA": "南非",
+    "AE": "阿联酋",
+    "SA": "沙特",
+    "IL": "以色列",
+    "IE": "爱尔兰",
+    "NO": "挪威",
+    "DK": "丹麦",
+    "BE": "比利时",
+    "AT": "奥地利",
+    "CZ": "捷克",
+    "PT": "葡萄牙",
+    "GR": "希腊",
+    "RO": "罗马尼亚",
+    "NZ": "新西兰",
+}
+
+
 def format_country(country_code: Any) -> str:
-    """ISO-like two-letter code; unknown becomes ``??``."""
+    """Chinese country label for v2rayN remarks; unknown becomes ``??``.
+
+    Falls back to the raw ISO code when no Chinese label is mapped, so
+    obscure regions stay visible instead of collapsing to ``??``.
+    """
     text = str(country_code or "").strip().upper()
     if text in _UNKNOWN_COUNTRY_CODES:
         return UNKNOWN_COUNTRY_PLACEHOLDER
-    return text
+    return _COUNTRY_ZH.get(text, text)
 
 
 def score_purity(ranked: Any) -> float | None:
