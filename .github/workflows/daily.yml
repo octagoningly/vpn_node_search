@@ -1,21 +1,61 @@
-name: NodeBench Daily Run
+# NodeBench Daily — scheduled + manual pipeline
+#
+# ── How to trigger ──────────────────────────────────────────────────────────
+# Manual:  Actions → "NodeBench Daily" → Run workflow (workflow_dispatch)
+# Auto:    schedule cron (see below)
+#
+# ── Timezone ────────────────────────────────────────────────────────────────
+# GitHub Actions `schedule` is UTC-only (no timezone field). The cron below is
+# therefore written in UTC and mapped here to the operator's local time:
+#   cron "37 3 * * *"  →  03:37 UTC daily
+#                      ≈  11:37 Asia/Shanghai (UTC+8, 中国标准时间)
+# 开发规则.md §3.9 以 timezone "Asia/Shanghai" 为示例；Actions 侧只能用 UTC cron，
+# 本地对应时间以本注释为准。
+#
+# ── Secrets / vars (configure in repo Settings → Secrets and variables) ─────
+# Repository *variables*:
+#   NODEBENCH_PUBLISH_ENABLED = "true"   enables the publish step (default: off)
+# Repository *secrets* (optional, injected only into the steps that need them):
+#   NODEBENCH_GITHUB_TOKEN       GitHub code-search token for sources.github
+#   NODEBENCH_REPUTATION_API_KEY optional reputation provider key
+# Built-in:
+#   GITHUB_TOKEN                 used by the github source adapter; never echoed
+#
+# ── Publish (default OFF) ───────────────────────────────────────────────────
+# The publish step is separate from the run step and is skipped unless the
+# repository variable NODEBENCH_PUBLISH_ENABLED is exactly "true". The run step
+# always passes --no-publish so diagnostics never require elevated permissions.
+#
+# ── Artifact safety ─────────────────────────────────────────────────────────
+# Only redacted diagnostics/reports are uploaded. NEVER upload:
+#   nodebench.db / *.db, tokens, private URIs, full subscription text,
+#   proxy-raw.txt / proxy-clash.yaml (contain node credentials).
+#
+# ── Shell ───────────────────────────────────────────────────────────────────
+# Uses bash on ubuntu-latest (offline.yml uses powershell in a container;
+# daily.yml deliberately stays on plain bash).
+
+name: NodeBench Daily
 
 on:
   workflow_dispatch:
   schedule:
-    # UTC 03:37 → 上海（Asia/Shanghai, UTC+8）约 11:37
+    # 37 3 * * * = 03:37 UTC daily ≈ 11:37 Asia/Shanghai (UTC+8)
     - cron: "37 3 * * *"
 
+# Least privilege: read the repo, upload artifacts. No contents: write.
 permissions:
   contents: read
+  actions: write
 
+# One daily run at a time; do not cancel an in-flight run mid-publish.
 concurrency:
   group: nodebench-daily
-  # 不取消进行中的任务，避免并行写 output 时互相覆盖
   cancel-in-progress: false
 
 jobs:
   daily:
+    name: Doctor + run + optional publish
     runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:
@@ -25,50 +65,100 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up UV
+      - name: Set up uv
         uses: astral/setup-uv@v3
         with:
+          # Pin to the same Python version as the project
           python-version: "3.12"
           enable-cache: true
 
       - name: Install dependencies
         run: uv sync --frozen
 
-      - name: Run doctor
-        run: uv run nodebench doctor
+      - name: Doctor
+        # Informational. Missing optional binaries (Mihomo / CloudflareSpeedTest)
+        # are expected on a bare runner and must not block daily diagnostics.
+        continue-on-error: true
+        run: uv run nodebench doctor 2>&1 | tee doctor.log
 
-      - name: Run local profile
+      - name: Dry-run scope check
+        # Writes dry-run-report.json; checks source scope and budget only.
+        run: uv run nodebench run --profile local --dry-run
+
+      - name: Run pipeline (local profile, no publish)
+        # Secrets are injected only here and must never be echoed.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODEBENCH_GITHUB_TOKEN: ${{ secrets.NODEBENCH_GITHUB_TOKEN }}
+          NODEBENCH_REPUTATION_API_KEY: ${{ secrets.NODEBENCH_REPUTATION_API_KEY }}
         run: uv run nodebench run --profile local --no-publish
 
-      # 仅上传脱敏后的诊断/报告产物：
-      # 不包含 nodebench.db、私有 URI、token、完整订阅原文
-      - name: Upload diagnostic artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: nodebench-daily-output
-          path: |
-            output/**/report*
-            output/**/manifest*
-            output/**/dry-run*
-            output/**/dry_run*
-            output/**/diagnostics*
-          if-no-files-found: warn
-          retention-days: 7
-
-      # 发布步骤默认关闭，与 run 分离；仅在 vars.NODEBENCH_PUBLISH_ENABLED == 'true' 时执行
+      # Publish is a separate step, default OFF. Gated by a repo variable so
+      # diagnostics never depend on it. Reuses the latest run-id to export and
+      # write output/latest/ without re-probing.
       - name: Publish reports (opt-in)
         if: ${{ vars.NODEBENCH_PUBLISH_ENABLED == 'true' }}
         env:
-          NODEBENCH_PUBLISH_TOKEN: ${{ secrets.NODEBENCH_PUBLISH_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODEBENCH_GITHUB_TOKEN: ${{ secrets.NODEBENCH_GITHUB_TOKEN }}
+          NODEBENCH_REPUTATION_API_KEY: ${{ secrets.NODEBENCH_REPUTATION_API_KEY }}
         run: |
-          if [ -z "${NODEBENCH_PUBLISH_TOKEN}" ]; then
-            echo "NODEBENCH_PUBLISH_TOKEN is not configured; skipping publish."
-            exit 0
-          fi
-          # 仅对本轮 run-id 执行导出与本地 output/latest 发布，不重新探测
-          RUN_ID="$(ls -1 output | grep -E '^[0-9]{8}T[0-9]{6}Z-' | sort | tail -n 1)"
+          set -euo pipefail
+          RUN_ID="$(ls -1 output 2>/dev/null | grep -E '^[0-9]{8}T[0-9]{6}Z-' | sort | tail -n 1 || true)"
           if [ -z "${RUN_ID}" ]; then
             echo "No run id found under output/; skipping publish."
             exit 0
           fi
+          echo "Publishing run_id=${RUN_ID}"
           uv run nodebench run --profile local --run-id "${RUN_ID}"
+
+      - name: Stage safe artifacts
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p ci-artifacts
+
+          if [[ -f doctor.log ]]; then
+            cp doctor.log ci-artifacts/
+          fi
+
+          # Whitelist only redacted diagnostics / reports under output/.
+          if [[ -d output ]]; then
+            while IFS= read -r -d '' f; do
+              rel="${f#output/}"
+              dest="ci-artifacts/${rel}"
+              mkdir -p "$(dirname "$dest")"
+              cp "$f" "$dest"
+            done < <(find output -type f \( \
+                -name 'run-report.json' -o \
+                -name 'dry-run-report.json' -o \
+                -name 'probe-results.json' -o \
+                -name 'scored.json' -o \
+                -name 'manifest.json' -o \
+                -name 'report.json' \
+              \) -print0)
+          fi
+
+          # Defense in depth: drop anything sensitive that might have slipped in.
+          find ci-artifacts -type f \( \
+              -name '*.db' -o \
+              -name '*.sqlite' -o \
+              -name '*.sqlite3' -o \
+              -name 'proxy-raw.txt' -o \
+              -name 'proxy-clash.yaml' -o \
+              -name 'cf-addapi.txt' -o \
+              -name 'cf-addcsv.csv' -o \
+              -name '*.env' \
+            \) -delete
+
+          echo "Staged artifact files:"
+          find ci-artifacts -type f | sort
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nodebench-daily-diagnostics
+          path: ci-artifacts/
+          if-no-files-found: warn
+          retention-days: 14
