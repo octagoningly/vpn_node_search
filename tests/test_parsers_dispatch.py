@@ -173,7 +173,7 @@ def test_yaml_issue_keeps_its_own_reference():
 
 
 def test_csv_issue_keeps_line_reference():
-    item = make_item("csv", "example.test,443\n")
+    item = make_item("csv", "not_a_host!,443\n")
     proxies, endpoints, issues = parse_raw_item(item)
     assert endpoints == []
     assert issues[0].code == "invalid_row"

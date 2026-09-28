@@ -52,11 +52,26 @@ def _split_bracket(value):
 
 
 def _valid_ip(value):
+    text = str(value).strip()
     try:
-        ipaddress.ip_address(str(value).strip())
+        ipaddress.ip_address(text)
         return True
     except ValueError:
+        pass
+    # conservative DNS hostname
+    if not text or len(text) > 253 or "/" in text or " " in text:
         return False
+    if text.startswith(".") or text.endswith(".") or ".." in text:
+        return False
+    labels = text.split(".")
+    for label in labels:
+        if not label or len(label) > 63:
+            return False
+        if label.startswith("-") or label.endswith("-"):
+            return False
+        if any(ch not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-" for ch in label):
+            return False
+    return True
 
 
 def _parse_tls(value):
@@ -164,4 +179,40 @@ def parse_endpoint_csv(text, source_id=""):
             endpoints.append(node)
         if issue is not None:
             issues.append(issue)
+    return endpoints, issues
+
+
+def parse_endpoint_lines(text, source_id=""):
+    """Parse ADDAPI-style lines: HOST[:PORT] (comments already stripped)."""
+    raw = "" if text is None else str(text)
+    endpoints = []
+    issues = []
+    for line_no, raw_line in enumerate(raw.splitlines(), start=1):
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        ref = "line:{0}".format(line_no)
+        host, embedded_port = _split_bracket(line)
+        port = parse_port(embedded_port) if embedded_port else None
+        if port is None and host and ":" in host and not host.startswith("["):
+            host, _, tail = host.partition(":")
+            port = parse_port(tail)
+        if port is None:
+            port = 443
+        if not host or not _valid_ip(host):
+            issues.append(
+                make_issue(source_id, INVALID_ROW, "invalid endpoint host", ref)
+            )
+            continue
+        endpoints.append(
+            ParsedEndpoint(
+                source_id=source_id,
+                address=str(host).strip().lower(),
+                port=port,
+                target_host="",
+                tls=True,
+                params={},
+                remarks="",
+            )
+        )
     return endpoints, issues

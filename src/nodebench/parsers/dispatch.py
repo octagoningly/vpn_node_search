@@ -9,7 +9,7 @@ from nodebench.parsers.common import (
     UNSUPPORTED_CONTENT,
     make_issue,
 )
-from nodebench.parsers.csv import parse_endpoint_csv
+from nodebench.parsers.csv import parse_endpoint_csv, parse_endpoint_lines
 from nodebench.parsers.uri import parse_uri
 from nodebench.parsers.yaml_clash import parse_clash_yaml
 
@@ -80,6 +80,10 @@ def parse_raw_item(item):
             csv_endpoints, csv_issues = parse_endpoint_csv(item.payload, source_id)
             endpoints.extend(csv_endpoints)
             issues.extend(csv_issues)
+        elif content == "endpoint_list":
+            line_endpoints, line_issues = parse_endpoint_lines(item.payload, source_id)
+            endpoints.extend(line_endpoints)
+            issues.extend(line_issues)
         else:
             issues.append(
                 make_issue(

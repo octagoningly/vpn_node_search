@@ -96,7 +96,7 @@ class RawItem(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     source_id: str
-    content_type: Literal["uri_list", "base64_sub", "yaml", "csv", "text"]
+    content_type: Literal["uri_list", "base64_sub", "yaml", "csv", "text", "endpoint_list"]
     payload: str
     fetched_at: datetime
     license_tag: str = "unknown"

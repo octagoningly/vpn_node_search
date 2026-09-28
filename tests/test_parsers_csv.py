@@ -75,7 +75,7 @@ def test_column_count_mismatch():
 
 
 def test_invalid_ip_reported():
-    text = "example.test,443\n"
+    text = "not_a_host!.local,443\n"
     endpoints, issues = parse_endpoint_csv(text, SRC)
     assert endpoints == []
     assert issues[0].code == "invalid_row"

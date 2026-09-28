@@ -36,7 +36,7 @@ def test_single_ip_file_produces_one_endpoint_item(tmp_path: Path):
     assert len(items) == 1
     item = items[0]
     assert item.source_id == "cf"
-    assert item.content_type == "text"
+    assert item.content_type == "endpoint_list"
     assert item.payload == "192.0.2.7:443"
     assert item.license_tag == "user_supplied"
     assert item.source_ref == "input/cf.txt"
@@ -209,7 +209,7 @@ def test_budget_is_shared_across_candidate_files(tmp_path: Path):
 def test_project_candidate_samples_are_importable():
     config = cf_config("input/cf-candidates.txt", "input/cf-candidates.csv")
     items, reports = collect_cf(config, base_dir=PROJECT_ROOT)
-    assert [item.content_type for item in items] == ["text", "csv"]
+    assert [item.content_type for item in items] == ["endpoint_list", "csv"]
     report = reports[0]
     assert report.ok is True
     assert report.errors == []

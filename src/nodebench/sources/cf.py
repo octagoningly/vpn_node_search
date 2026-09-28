@@ -328,7 +328,7 @@ def collect_cf(
             items.append(
                 RawItem(
                     source_id=SOURCE_ID,
-                    content_type="csv" if (has_header or suffix == ".csv") else "text",
+                    content_type="csv" if (has_header or suffix == ".csv") else "endpoint_list",
                     payload="\n".join(added),
                     fetched_at=fetched_at,
                     license_tag=license_tag,
