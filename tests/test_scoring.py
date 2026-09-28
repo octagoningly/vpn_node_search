@@ -597,23 +597,16 @@ class TestEndpointScoring:
         assert item.notes["stability_penalty"] == pytest.approx(0.9)
 
     def test_endpoint_purity_missing_pending(self) -> None:
+        # CF edge probing assigns a neutral default risk when unknown, so
+        # ranking can proceed; purity is never fabricated as "pure".
         report = run_score(
             edges=(make_edge("e1"),),
             results=(make_eok("e1"),),
         )
         item = report.endpoints[0]
-        assert item.status == "pending"
-        assert "purity" in item.pending
-
-        exclude = ScoringConfig(filters=ScoringFilters(missing="exclude"))
-        report = run_score(
-            edges=(make_edge("e1"),),
-            results=(make_eok("e1"),),
-            scoring=exclude,
-        )
-        item = report.endpoints[0]
-        assert item.status == "filtered"
-        assert "missing_purity" in item.filters_failed
+        assert item.status == "ranked"
+        assert item.notes.get("purity_source") == "cf_default_neutral"
+        assert item.score_breakdown.get("purity") == pytest.approx(0.7)
 
     def test_endpoint_cf_anycast_neutral_purity(self) -> None:
         report = run_score(

@@ -59,7 +59,7 @@ probe:
 intelligence:
   reputation_enabled: false
   echo_url: ""
-  geo_url: ""
+  geo_url: "http://ip-api.com/json"
   reputation_url: ""
   timeout: 5.0
 history:

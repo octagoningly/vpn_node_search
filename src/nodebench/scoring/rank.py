@@ -451,7 +451,14 @@ def _score_endpoint(
         country = _region_country(edge.params.get("region"))
 
     geo: GeoResult | None = None
-    if country is None and geo_lookup is not None and _is_ip(edge.address):
+    # Only geo-lookup candidates that can actually rank: avoids rate-limit
+    # storms on thousands of never-probed endpoints.
+    if (
+        country is None
+        and outcome == "ok"
+        and geo_lookup is not None
+        and _is_ip(edge.address)
+    ):
         geo = geo_lookup(edge.address)
         if geo is not None:
             resolved = _country_code(geo.country_code)
@@ -459,6 +466,11 @@ def _score_endpoint(
                 country = resolved
 
     risk, risk_source = _resolve_risk(edge.params, geo)
+    if risk is None:
+        # CF edge probing never fabricates "pure": unknown risk gets a
+        # neutral default so speed/latency ranking can still proceed.
+        risk = CF_ANYCAST_NEUTRAL_RISK
+        risk_source = "cf_default_neutral"
 
     if outcome == "ok":
         if host_compatible is False:
