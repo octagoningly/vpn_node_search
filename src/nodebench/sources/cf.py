@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ipaddress
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -8,6 +9,13 @@ from typing import Any
 from nodebench.core.config import AppConfig, CfSourceConfig
 from nodebench.core.schema import USER_SUPPLIED_LICENSE_TAG, ErrorInfo, RawItem, SourceReport
 from nodebench.sources.base import BOM, make_error, resolve_base_dir
+from nodebench.sources.http_utils import is_private_host
+
+# Conservative DNS hostname: labels 1-63 chars, alnum + hyphen, not starting/ending with hyphen.
+_HOSTNAME_RE = re.compile(
+    r"^(?=.{1,253}$)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)"
+    r"(?:\.(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?))*$"
+)
 
 SOURCE_ID = "cf"
 DEFAULT_PORT = 443
@@ -88,9 +96,18 @@ def _validate_token(token: str, port: int | None) -> tuple[str, int | None] | No
         return token, port
     try:
         ipaddress.ip_address(token)
+        if is_private_host(token):
+            return None
+        return token, port
     except ValueError:
+        pass
+    # DNS hostname candidates (e.g. cloudflare.182682.xyz)
+    if not _HOSTNAME_RE.match(token):
         return None
-    return token, port
+    lowered = token.lower()
+    if is_private_host(lowered) or lowered.endswith((".local", ".localhost", ".internal", ".home.arpa")):
+        return None
+    return lowered, port
 
 
 def _parse_line(

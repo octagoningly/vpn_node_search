@@ -1,0 +1,78 @@
+# 用户提供的 CF 端点候选（2026-09-28）ADDAPI 风格：HOST[:PORT]#备注
+104.17.29.227:8443#CF官方优选2（美）
+104.17.23.66:2087#CF官方优选3（美）
+cloudflare.182682.xyz#WeTest.Vip维护（美）
+bestcf.030101.xyz#Mingyu维护（美）
+saas.sin.fan#MIYU维护（日）
+cf.877774.xyz#秋名山维护（日）
+mfa.gov.ua#乌克兰外交部（新）
+www.shopify.com#Shopify官方优选（新）
+store.ubi.com#Ubisoft（新）
+staticdelivery.nexusmods.com#NexusMods（德）
+time.is#官方优选（德）
+icook.hk#官方优选（荷）
+icook.tw#官方优选（德）
+2x.nz#二叉树树维护（荷）
+104.18.33.138#CF电信优选5（新）
+104.28.163.98#CF电信优选6（新）
+104.28.166.113#CF电信优选10（新）
+cf.cloudflare.182682.xyz#wetest.vip维护（新）
+cdn.2020111.xyz#（新）
+cdns.doon.eu.org#（新）
+cf.0sm.com#（新）
+cfip.xxxxxxxx.tk#OTC维护（新）
+cloudflare.182682.xyz#WeTest.Vip维护（新）
+cloudflare-ip.mofashi.ltd#（新）
+nrt.xxxxxxxx.nyc.mn#（新）
+nrtcfdns.zone.id#（新）
+saas.sin.fan#（新）
+xn--b6gac.eu.org#（新）
+104.24.215.4:443#DE 官方优选（德）
+ProxyIP.GB.CMLiussss.net#(英)
+ProxyIP.HK.CMLiussss.net#ProxyIP.香港
+ProxyIP.SG.CMLiussss.net#ProxyIP.新加坡
+ProxyIP.JP.CMLiussss.net#ProxyIP.日本
+ProxyIP.KR.CMLiussss.net#ProxyIP.韩国
+ProxyIP.IN.CMLiussss.net#ProxyIP.印度
+ProxyIP.GB.CMLiussss.net#ProxyIP.英国
+ProxyIP.FR.CMLiussss.net#ProxyIP.法国
+ProxyIP.DE.CMLiussss.net#ProxyIP.德国
+ProxyIP.NL.CMLiussss.net#ProxyIP.荷兰
+ProxyIP.SE.CMLiussss.net#ProxyIP.瑞典
+ProxyIP.FI.CMLiussss.net#ProxyIP.芬兰
+ProxyIP.PL.CMLiussss.net#ProxyIP.波兰
+ProxyIP.RU.CMLiussss.net#ProxyIP.俄罗斯
+ProxyIP.CH.CMLiussss.net#ProxyIP.瑞士
+ProxyIP.LV.CMLiussss.net#ProxyIP.拉脱
+ProxyIP.US.CMLiussss.net#ProxyIP.美国
+ProxyIP.CA.CMLiussss.net#ProxyIP.加拿大
+kr.william.us.ci#威廉1
+tw.william.us.ci#威廉维护2
+proxy.mia.xx.kg#Mia维护
+108.162.198.178#(新)
+162.159.45.19#（新）
+114.32.9.249:443#TW-Taipei
+103.143.81.178:443#HK-Hong Kong
+103.143.81.222:2053#HK-Hong Kong
+120.26.92.186:8443#CN-Frankfurt
+103.242.2.214:8443#HK-Hong Kong
+103.143.81.178:443#HK-Hong Kong-IPv6
+134.185.127.173:443#KR-Seoul-IPv4
+103.143.81.250:443#HK-Hong Kong-IPv6
+103.197.185.178:443#VN-Hong Kong-IPv6
+103.242.2.181:443#HK-Hong Kong-IPv6
+103.143.81.222:2053#HK-Hong Kong-IPv6
+114.32.9.249:443#TW-Taipei-IPv4
+103.242.2.214:8443#HK-Hong Kong-IPv6
+134.185.99.52:443#KR-Seoul-IPv4
+120.26.92.186:8443#CN-Frankfurt-IPv6
+123.111.169.70:2053#KR-Seoul-IPv4
+137.220.225.56:443#JP-Tokyo-IPv4
+103.201.131.197:443#JP-Tokyo-IPv6
+129.154.50.72:8443#KR-Seoul-IPv6
+137.220.225.111:443#JP-Tokyo-IPv4
+101.32.41.107:443#HK-Hong Kong-IPv6
+122.10.119.252:443#HK-Hong Kong-IPv6
+129.226.202.149:443#SG-Singapore-IPv4
+134.122.164.55:443#JP-Tokyo-IPv4
+134.122.164.41:443#JP-Tokyo-IPv4

@@ -218,3 +218,37 @@ def test_project_candidate_samples_are_importable():
     assert all(ENDPOINT_PATTERN.fullmatch(line) for line in lines)
     assert "7.82" not in items[1].payload
     assert "MB/s" not in items[1].payload
+
+
+def test_hostname_candidates_are_accepted(tmp_path: Path):
+    write(
+        tmp_path / "input" / "hosts.txt",
+        "cloudflare.182682.xyz#备注\n"
+        "ProxyIP.HK.CMLiussss.net\n"
+        "mfa.gov.ua\n"
+        "104.17.29.227:8443#CF优选\n",
+    )
+    items, reports = collect_cf(cf_config("input/hosts.txt"), base_dir=tmp_path)
+    assert items[0].payload == (
+        "cloudflare.182682.xyz:443\n"
+        "proxyip.hk.cmliussss.net:443\n"
+        "mfa.gov.ua:443\n"
+        "104.17.29.227:8443"
+    )
+    assert reports[0].ok is True
+    assert reports[0].fetched == 1
+
+
+def test_private_and_invalid_hostnames_rejected(tmp_path: Path):
+    write(
+        tmp_path / "input" / "bad.txt",
+        "localhost\n"
+        "127.0.0.1\n"
+        "intranet.local\n"
+        "not_a_host!\n"
+        "192.168.1.1\n"
+        "example.com\n",
+    )
+    items, reports = collect_cf(cf_config("input/bad.txt"), base_dir=tmp_path)
+    assert items[0].payload == "example.com:443"
+    assert reports[0].ok is True
