@@ -6,6 +6,20 @@ $root = Split-Path -Parent $PSScriptRoot
 $profileName = $env:NODEBENCH_PROFILE
 if (-not $profileName) { $profileName = "auto-collect" }
 
+# Load local secrets from .env (never committed; see .env.example)
+$envFile = Join-Path $root ".env"
+if (Test-Path -LiteralPath $envFile) {
+    Get-Content -LiteralPath $envFile | ForEach-Object {
+        $line = $_.Trim()
+        if ($line -and -not $line.StartsWith("#") -and $line -match "^([A-Za-z_][A-Za-z0-9_]*)=(.*)$") {
+            $name = $Matches[1]
+            $value = $Matches[2].Trim('"').Trim("'")
+            if ($value) { Set-Item -Path "Env:$name" -Value $value }
+        }
+    }
+    Write-Output "loaded .env"
+}
+
 $uv = Get-Command uv -ErrorAction SilentlyContinue
 if (-not $uv) {
     Write-Output "error: uv not found on PATH; install uv first"

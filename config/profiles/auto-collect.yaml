@@ -26,8 +26,10 @@ sources:
       - 'filename:addressesapi.txt'
       - 'filename:addressescsv.csv'
       - 'filename:cf-addapi.txt'
+      - 'filename:addressesipv6api.txt'
       - '"IP地址" filename:addressescsv.csv'
-    max_files_per_run: 20
+      - 'filename:ip.txt CloudflareSpeedTest'
+    max_files_per_run: 30
     cache_ttl_hours: 24
     offline: false
   cf:

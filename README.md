@@ -76,6 +76,21 @@ powershell -ExecutionPolicy Bypass -File scripts/publish.ps1
 
 会自动测速并推送到 `public` 分支。edgetunnel 管理页里的 ADDAPI 链接**只需填一次**，之后每次跑完自动生效，无需再改。
 
+### 配置 GitHub Token（可选，扩大候选池）
+
+本地 GitHub 代码搜索需要 Token。复制 `.env.example` 为 `.env` 并填入：
+
+```powershell
+Copy-Item .env.example .env
+# 编辑 .env，填入 GITHUB_TOKEN=ghp_xxx
+```
+
+- **Classic PAT**：只勾 `public_repo`（足够搜公开代码）
+- **不要勾 `repo`**（会暴露私有仓库，密钥权限过大）
+- Fine-grained PAT：`Contents: Read` + `Metadata: Read` 即可
+
+`scripts/publish.ps1` 会自动加载 `.env`。`.env` 已在 `.gitignore` 中，不会上传。
+
 评分权重、速度硬门槛、备注格式均可在 `config/default.yaml` 的 `scoring` 段自定义。
 
 ## 二进制获取

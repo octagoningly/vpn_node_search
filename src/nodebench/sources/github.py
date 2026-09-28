@@ -143,9 +143,10 @@ def _save_cache(path: Path, payload: dict[str, Any]) -> None:
 
 
 def _resolve_token() -> str:
-    token = os.environ.get("GITHUB_TOKEN", "").strip()
-    if token:
-        return token
+    for name in ("GITHUB_TOKEN", "NODEBENCH_GITHUB_TOKEN"):
+        token = os.environ.get(name, "").strip()
+        if token:
+            return token
     return ""
 
 
