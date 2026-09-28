@@ -212,6 +212,7 @@ def run_score_stage(
     risk_lookup = make_risk_lookup(
         enabled=bool(config.intelligence.reputation_enabled),
         timeout=float(config.intelligence.timeout),
+        geo_lookup=geo_lookup,
     )
     score_report = score_run(
         run_id=run_id,
@@ -496,6 +497,7 @@ def score_artifacts(config: AppConfig, run_id: str) -> ScoreReport:
     risk_lookup = make_risk_lookup(
         enabled=bool(config.intelligence.reputation_enabled),
         timeout=float(config.intelligence.timeout),
+        geo_lookup=geo_lookup,
     )
     score_report = score_run(
         run_id=run_id,

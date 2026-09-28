@@ -175,6 +175,7 @@ def make_risk_lookup(
     enabled: bool,
     timeout: float = 8.0,
     max_cache: int = 256,
+    geo_lookup: Callable[[str], GeoResult | None] | None = None,
 ) -> Callable[[str], float | None] | None:
     """Bounded, cached AbuseIPDB risk resolver (0-100, higher = riskier).
 
@@ -221,6 +222,20 @@ def make_risk_lookup(
                 value = float(obs.risk)
             except (TypeError, ValueError):
                 value = None
+        # Refine with IPinfo type signals: anycast/CDN is safer, hosting is riskier.
+        if value is not None and geo_lookup is not None:
+            g = geo_lookup(ip)
+            if g is not None:
+                text = f"{getattr(g, 'isp', '')} {getattr(g, 'asn', '')}".lower()
+                if getattr(g, "anycast", False) or any(
+                    marker in text for marker in _CF_ASN_MARKERS
+                ):
+                    value = max(0.0, value - 5.0)
+                elif any(
+                    marker in text
+                    for marker in ("hosting", "datacenter", "server", "cloud")
+                ):
+                    value = min(100.0, value + 5.0)
         cache[ip] = value
         return value
 
@@ -254,6 +269,8 @@ def _looks_like_cf_anycast(
         if raw is True:
             return True
     if geo is not None:
+        if getattr(geo, "anycast", False):
+            return True
         for text in (geo.asn, geo.isp):
             lowered = str(text or "").lower()
             if any(marker in lowered for marker in _CF_ASN_MARKERS):

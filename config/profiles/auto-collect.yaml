@@ -14,6 +14,8 @@ sources:
       # iptest 风格 CSV
       - https://raw.githubusercontent.com/cmliu/WorkerVless2sub/main/addressescsv.csv
       - https://raw.githubusercontent.com/cmliu/WorkerVless2sub/main/addressesipv6api.txt
+      # CF 优选 IP 公开清单
+      - https://raw.githubusercontent.com/cmliu/CFcdnVmess2sub/main/addressesapi.txt
     timeout_s: 20
     license_tag: "MIT"
     offline: false
