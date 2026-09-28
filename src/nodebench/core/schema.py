@@ -718,7 +718,8 @@ class PublishResult(BaseModel):
 
     ``visibility`` is always ``public`` because this result describes the
     shared ``output/latest`` directory; the private export directory is
-    tracked separately through the export stage view.
+    tracked separately through the export stage view. ``public_urls`` lists
+    the remote destinations returned by an enabled upload backend.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -735,6 +736,7 @@ class PublishResult(BaseModel):
     replaced_previous: bool = False
     cf_candidates_user_supplied: bool = False
     cf_candidates_authorized: bool = False
+    public_urls: list[str] = Field(default_factory=list)
 
 
 def assert_probe_real(result: Any) -> None:

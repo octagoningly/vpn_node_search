@@ -101,6 +101,18 @@ class ExportError(NodeBenchError):
         super().__init__(stage=stage, code=code, message=message, retryable=retryable)
 
 
+class PublishError(ExportError):
+    def __init__(
+        self,
+        code: str = "publish_error",
+        message: str = "publish error",
+        retryable: bool = False,
+    ) -> None:
+        super().__init__(
+            code=code, message=message, retryable=retryable, stage="publish"
+        )
+
+
 def exit_code_for(err: BaseException) -> int:
     """Map an error to the documented process exit code."""
     if isinstance(err, ConfigError):
@@ -131,5 +143,6 @@ __all__ = [
     "ProbeError",
     "StorageError",
     "ExportError",
+    "PublishError",
     "exit_code_for",
 ]

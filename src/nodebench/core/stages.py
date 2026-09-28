@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import datetime, timezone
@@ -14,15 +15,19 @@ from nodebench.core.errors import ConfigError, NodeBenchError, StorageError
 from nodebench.core.schema import (
     EdgeEndpoint,
     ExportOutcome,
+    ExportedFile,
     ProxyNode,
     ProxyProbeResult,
+    PublishResult,
     RawItem,
     ScoreReport,
     SourceReport,
+    ValidationReport,
 )
 from nodebench.core.serialization import public_dump, write_json_atomic
 from nodebench.exporters import build_export
 from nodebench.exporters.build import stage_view
+from nodebench.exporters.manifest import MANIFEST_NAME
 from nodebench.history import db as dbmod
 from nodebench.history.stats import history_for_items
 from nodebench.history.store import (
@@ -36,6 +41,7 @@ from nodebench.history.store import (
 from nodebench.intelligence import IntelligenceService
 from nodebench.probes import project_root
 from nodebench.publishing import is_redistributable, publish_output
+from nodebench.publishing.upload import upload_published_files
 from nodebench.scoring import SCORING_VERSION, score_run
 
 STAGE_ORDER = ("inspect", "persist", "score", "export", "publish")
@@ -237,6 +243,7 @@ def run_export_stage(
         endpoints=score_report.endpoints,
         scoring_version=SCORING_VERSION,
         cf_candidates_authorized=bool(config.publish.cf_candidates_authorized),
+        dls_min_speed_mb_s=float(config.scoring.filters.min_speed_mb_s),
     )
 
 
@@ -264,28 +271,48 @@ def run_publish_stage(
     score_report: ScoreReport,
     licenses: Sequence[Mapping[str, Any]],
     allow_publish: bool,
+    enabled: bool | None = None,
+    run_upload: bool = True,
 ) -> dict[str, Any]:
     tag_by_source = {
         str(entry.get("source_id") or ""): str(entry.get("license_tag") or "unknown")
         for entry in licenses
     }
     run_id = str(report["run_id"])
-    return public_dump(
-        publish_output(
-            export_dir=export_dir(config, run_id),
-            target_dir=output_base(config) / LATEST_DIR_NAME,
-            report=report,
-            outcome=outcome,
-            ranked_proxies=_ranked_count(score_report.proxies),
-            ranked_endpoints=_ranked_count(score_report.endpoints),
-            proxy_license_tags=_tags_for(score_report.proxies, tag_by_source),
-            endpoint_license_tags=_tags_for(score_report.endpoints, tag_by_source),
-            enabled=bool(config.publish.enabled),
-            allow_publish=bool(allow_publish),
-            allow_proxy_credentials=bool(config.publish.allow_proxy_credentials),
-            cf_candidates_authorized=bool(config.publish.cf_candidates_authorized),
-        )
+    publish_enabled = bool(config.publish.enabled if enabled is None else enabled)
+    result = publish_output(
+        export_dir=export_dir(config, run_id),
+        target_dir=output_base(config) / LATEST_DIR_NAME,
+        report=report,
+        outcome=outcome,
+        ranked_proxies=_ranked_count(score_report.proxies),
+        ranked_endpoints=_ranked_count(score_report.endpoints),
+        proxy_license_tags=_tags_for(score_report.proxies, tag_by_source),
+        endpoint_license_tags=_tags_for(score_report.endpoints, tag_by_source),
+        enabled=publish_enabled,
+        allow_publish=bool(allow_publish),
+        allow_proxy_credentials=bool(config.publish.allow_proxy_credentials),
+        cf_candidates_authorized=bool(config.publish.cf_candidates_authorized),
     )
+    if run_upload and result.status == "ok" and bool(config.publish.upload.enabled):
+        try:
+            urls = upload_published_files(
+                config.publish.upload,
+                output_base(config) / LATEST_DIR_NAME,
+                base_name=run_id,
+            )
+        except Exception as err:
+            result = result.model_copy(
+                update={
+                    "status": "failed",
+                    "reason": "upload_failed",
+                    "errors": [error_text(err)],
+                    "public_urls": [],
+                }
+            )
+        else:
+            result = result.model_copy(update={"public_urls": list(urls)})
+    return public_dump(result)
 
 
 def run_post_stages(
@@ -492,6 +519,101 @@ def export_artifacts(config: AppConfig, run_id: str) -> ExportOutcome:
         endpoints=score_report.endpoints,
         scoring_version=SCORING_VERSION,
         cf_candidates_authorized=bool(config.publish.cf_candidates_authorized),
+        dls_min_speed_mb_s=float(config.scoring.filters.min_speed_mb_s),
+    )
+
+
+def load_export_outcome(config: AppConfig, run_id: str) -> ExportOutcome:
+    """Describe an existing export directory without rewriting it."""
+    directory = export_dir(config, run_id)
+    payload = _read_json(directory / MANIFEST_NAME, "export_missing")
+    if not isinstance(payload, dict):
+        raise ConfigError(
+            code="export_invalid",
+            message="export manifest must be an object",
+        )
+    files: list[ExportedFile] = []
+    entries = payload.get("files")
+    if isinstance(entries, list):
+        for item in entries:
+            if not isinstance(item, Mapping):
+                continue
+            files.append(
+                ExportedFile(
+                    name=str(item.get("name") or ""),
+                    sha256=str(item.get("sha256") or ""),
+                    size_bytes=int(item.get("size_bytes") or 0),
+                    entry_count=int(item.get("entry_count") or 0),
+                )
+            )
+    manifest_path = directory / MANIFEST_NAME
+    raw_manifest = manifest_path.read_bytes()
+    files.append(
+        ExportedFile(
+            name=MANIFEST_NAME,
+            sha256=hashlib.sha256(raw_manifest).hexdigest(),
+            size_bytes=len(raw_manifest),
+            entry_count=0,
+        )
+    )
+    files.sort(key=lambda item: item.name)
+    validation_raw = payload.get("validation")
+    if isinstance(validation_raw, Mapping):
+        validation = ValidationReport(
+            ok=bool(validation_raw.get("ok")),
+            errors=[str(entry) for entry in validation_raw.get("errors") or []],
+            files_checked=[
+                str(entry) for entry in validation_raw.get("files_checked") or []
+            ],
+        )
+    else:
+        validation = ValidationReport(ok=True, errors=[], files_checked=[])
+    counts_raw = payload.get("counts")
+    counts = (
+        {str(key): int(value) for key, value in counts_raw.items()}
+        if isinstance(counts_raw, Mapping)
+        else {}
+    )
+    return ExportOutcome(
+        status="ok",
+        directory=str(directory),
+        files=files,
+        errors=list(validation.errors),
+        validation=validation,
+        publishable=bool(payload.get("publishable")),
+        counts=counts,
+    )
+
+
+def publish_artifacts(
+    config: AppConfig,
+    run_id: str,
+    *,
+    allow_publish: bool = True,
+    enabled: bool | None = True,
+) -> dict[str, Any]:
+    """Standalone publish: gate an existing export, then optionally upload.
+
+    ``enabled`` defaults to True because ``nodebench publish`` is the
+    explicit release step; pass ``None`` to honour ``publish.enabled``.
+    """
+    report = load_run_report(config, run_id)
+    score_report = load_score_report(config, run_id)
+    outcome = load_export_outcome(config, run_id)
+    licenses_raw = report.get("licenses")
+    licenses: Sequence[Mapping[str, Any]] = (
+        [entry for entry in licenses_raw if isinstance(entry, Mapping)]
+        if isinstance(licenses_raw, list)
+        else []
+    )
+    return run_publish_stage(
+        config,
+        report,
+        outcome=outcome,
+        score_report=score_report,
+        licenses=licenses,
+        allow_publish=allow_publish,
+        enabled=enabled,
     )
 
 
@@ -510,10 +632,12 @@ __all__ = [
     "inspect_artifacts",
     "intelligence_path",
     "license_entries",
+    "load_export_outcome",
     "load_probe_results",
     "load_run_report",
     "load_score_report",
     "output_base",
+    "publish_artifacts",
     "register_node_secrets",
     "run_export_stage",
     "run_inspect_stage",

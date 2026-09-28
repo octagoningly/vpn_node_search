@@ -341,13 +341,76 @@ class ScoringConfig(BaseModel):
     cf_weights: ScoringCfWeights = Field(default_factory=ScoringCfWeights)
 
 
+class GithubUploadConfig(BaseModel):
+    """GitHub Contents API destination for gate-approved public files."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    repository: str = ""
+    branch: str = "public"
+    path_prefix: str = "nodebench"
+    token_env: str = "GITHUB_TOKEN"
+
+    @field_validator("repository")
+    @classmethod
+    def _valid_repository(cls, value: str) -> str:
+        text = str(value or "").strip()
+        if text and text.count("/") != 1:
+            raise ValueError("repository must look like owner/repo")
+        return text
+
+
+class HttpUploadConfig(BaseModel):
+    """Generic HTTP PUT/POST destination for gate-approved public files."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    url: str = ""
+    method: Literal["PUT", "POST"] = "PUT"
+    timeout_s: float = 15.0
+    max_bytes: int = 2 * 1024 * 1024
+
+    @field_validator("timeout_s")
+    @classmethod
+    def _positive_timeout(cls, value: float) -> float:
+        if float(value) <= 0:
+            raise ValueError("must be greater than zero")
+        return float(value)
+
+    @field_validator("max_bytes")
+    @classmethod
+    def _positive_max_bytes(cls, value: int) -> int:
+        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            raise ValueError("max_bytes must be a positive integer")
+        return value
+
+
+class PublishUploadConfig(BaseModel):
+    """Remote upload of the whitelisted public files.
+
+    ``enabled`` defaults to False so existing runs stay local-only. The
+    folder backend copies into ``folder_path`` for user-managed sync;
+    github and http move files off the machine and require explicit
+    destinations.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    backend: Literal["folder", "github", "http"] = "folder"
+    folder_path: str = ""
+    github: GithubUploadConfig = Field(default_factory=GithubUploadConfig)
+    http: HttpUploadConfig = Field(default_factory=HttpUploadConfig)
+
+
 class PublishConfig(BaseModel):
     """Gates for the public ``output/latest`` directory.
 
     ``allow_proxy_credentials`` releases proxy credential files into the
     public directory, and ``cf_candidates_authorized`` explicitly allows
     publishing files built from user imported CF candidates. Both default to
-    False, as does ``enabled``.
+    False, as does ``enabled``. ``upload`` optionally moves the whitelisted
+    public files to a remote destination after the local gates pass.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -355,6 +418,7 @@ class PublishConfig(BaseModel):
     enabled: bool = False
     allow_proxy_credentials: bool = False
     cf_candidates_authorized: bool = False
+    upload: PublishUploadConfig = Field(default_factory=PublishUploadConfig)
 
 
 class SchedulerConfig(BaseModel):
@@ -612,6 +676,9 @@ __all__ = [
     "ScoringFilters",
     "ScoringCfWeights",
     "ScoringConfig",
+    "GithubUploadConfig",
+    "HttpUploadConfig",
+    "PublishUploadConfig",
     "PublishConfig",
     "SchedulerConfig",
     "load_config",

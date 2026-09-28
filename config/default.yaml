@@ -84,6 +84,18 @@ publish:
   enabled: false
   allow_proxy_credentials: false
   cf_candidates_authorized: false
+  upload:
+    enabled: false
+    backend: folder   # folder | github | http
+    folder_path: ""   # folder backend
+    github:
+      repository: ""  # owner/repo
+      branch: "public"
+      path_prefix: "nodebench"
+      token_env: "GITHUB_TOKEN"
+    http:
+      url: ""
+      method: "PUT"
 scheduler:
   enabled: true
   default_time: "04:37"

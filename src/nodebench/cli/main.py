@@ -16,6 +16,7 @@ from nodebench.core.errors import (
     ConfigError,
     ExportError,
     NodeBenchError,
+    PublishError,
     exit_code_for,
 )
 from nodebench.core.orchestrator import resolve_run_exit, run_pipeline
@@ -24,6 +25,7 @@ from nodebench.core.serialization import dumps_json, public_dump, write_json_ato
 from nodebench.core.stages import (
     export_artifacts,
     inspect_artifacts,
+    publish_artifacts,
     score_artifacts,
     scored_path,
 )
@@ -460,6 +462,35 @@ def _cmd_export(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_publish(args: argparse.Namespace) -> int:
+    """Release an existing export through local gates and optional upload."""
+    config = _load(args, use_input=False)
+    run_id = _require_run_id(args)
+    result = publish_artifacts(config, run_id)
+    files = result.get("files") or []
+    print(
+        "[{0}] publish status={1} files={2} path={3}".format(
+            run_id,
+            result.get("status"),
+            len(files),
+            result.get("path") or "-",
+        )
+    )
+    for name in files:
+        print(f"[{run_id}] published={name}")
+    for url in result.get("public_urls") or []:
+        print(f"[{run_id}] public_url={url}")
+    status = str(result.get("status") or "")
+    if status in {"ok", "skipped"}:
+        if status == "skipped":
+            print(f"[{run_id}] publish skipped: {result.get('reason') or 'disabled'}")
+        return 0
+    reason = str(result.get("reason") or "publish_failed")
+    errors = result.get("errors") or []
+    detail = str(errors[0]) if errors else reason
+    raise PublishError(code=reason, message=f"publish stage failed: {detail}")
+
+
 SCHEDULER_ACTIONS = ("install", "status", "uninstall")
 YES_HINT = "pass --yes to create"
 UNINSTALL_YES_HINT = "pass --yes to uninstall"
@@ -758,6 +789,28 @@ def build_parser() -> argparse.ArgumentParser:
                 help="directory that holds run artifacts",
             )
         stage_parser.set_defaults(func=handler)
+
+    publish_parser = subparsers.add_parser(
+        "publish",
+        help="publish approved public results for an existing run",
+    )
+    publish_parser.add_argument(
+        "--run-id",
+        default=None,
+        help="run whose export/ directory is published to output/latest",
+    )
+    publish_parser.add_argument(
+        "--output-dir",
+        default=None,
+        help="directory that holds run artifacts",
+    )
+    publish_parser.add_argument(
+        "--debug",
+        action="store_true",
+        default=argparse.SUPPRESS,
+        help="print a traceback for unexpected errors",
+    )
+    publish_parser.set_defaults(func=_cmd_publish)
 
     scheduler_parser = subparsers.add_parser(
         "scheduler", help="manage system scheduled tasks"
