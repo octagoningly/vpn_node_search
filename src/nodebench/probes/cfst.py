@@ -596,6 +596,30 @@ class CfstProber:
             error_message=info.error_message,
         )
 
+    def lookup_metric(self, target: EndpointTarget) -> CsvRow | None:
+        key = (normalize_ip(target.address), int(target.port))
+        if key in self._metrics:
+            return self._metrics[key]
+        ip = self._resolved_ips.get(
+            (str(target.address).strip().lower(), int(target.port))
+        )
+        if ip:
+            return self._metrics.get((ip, int(target.port)))
+        return None
+
+    def unmeasured_failure(self, target: EndpointTarget) -> EndpointProbeResult:
+        """CFST never reached this candidate -- treat as timeout, not fake ok."""
+        return self._make(
+            target,
+            status=ProbeStatus.TIMEOUT,
+            failure_stage="tcp",
+            attempts=1,
+            timeouts=1,
+            error_code="probe_error",
+            error_message="not reachable in cfst bulk scan",
+            notes={"cfst_unmeasured": True},
+        )
+
     def probe(self, target: EndpointTarget) -> EndpointProbeResult:
         reason = self.skip_reason(target)
         if reason:
@@ -865,8 +889,38 @@ def run_cf_batch(
             active.append((index, target))
         else:
             selections[index] = prober.skip(target, budget.skip_reason())
+    # Bulk CFST latency/loss first -- cheap scan of every candidate.
     prober.collect_metrics([target for _index, target in active])
-    selections.update(run_active(active, prober.probe, prober.failure, budget))
+
+    # Only run the slow per-target TCP/TLS/HTTP check on candidates CFST
+    # actually measured (or the fastest tops). Everything else is dead weight
+    # and would just burn the deadline on timeouts.
+    detailed: list[tuple[int, EndpointTarget]] = []
+    quick_fail: list[tuple[int, EndpointTarget]] = []
+    for index, target in active:
+        row = prober.lookup_metric(target)
+        if row is not None:
+            detailed.append((index, target))
+        else:
+            quick_fail.append((index, target))
+
+    # Cap detailed checks; prefer lower CFST latency first.
+    max_detailed = max(1, int(budget.max_download_nodes) * 4)
+    if len(detailed) > max_detailed:
+        def _latency_key(item: tuple[int, EndpointTarget]) -> float:
+            row = prober.lookup_metric(item[1])
+            if row is None or row.latency_ms is None:
+                return 1e9
+            return float(row.latency_ms)
+
+        detailed.sort(key=_latency_key)
+        overflow = detailed[max_detailed:]
+        detailed = detailed[:max_detailed]
+        quick_fail.extend(overflow)
+
+    selections.update(run_active(detailed, prober.probe, prober.failure, budget))
+    for index, target in quick_fail:
+        selections[index] = prober.unmeasured_failure(target)
     return [selections[index] for index in range(len(targets))]
 
 

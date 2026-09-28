@@ -47,9 +47,9 @@ probe:
     cfst_path: tools/cfst/CloudflareSpeedTest.exe
     target_host: octagoningly-vpn.pages.dev
     speedtest_url: https://speed.cloudflare.com/__down?bytes=5000000
-    max_nodes: 400
-    max_download_nodes: 50
-    total_deadline_s: 300
+    max_nodes: 2500
+    max_download_nodes: 80
+    total_deadline_s: 420
     allowed_ports:
       - 443
       - 8443
