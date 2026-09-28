@@ -315,6 +315,21 @@ def record_intelligence(
     try:
         conn = dbmod.open_db(db_path)
         conn.execute("BEGIN IMMEDIATE")
+        # inspect runs before persist; keep the runs FK satisfied for this run_id
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO runs (
+                run_id, runner_id, profile, status, schema_version, dry_run,
+                generated_at, sources_total, sources_failed, raw_items,
+                proxy_nodes, edge_endpoints, parse_issues
+            ) VALUES (?, ?, '', 'partial', 1, 0, ?, 0, 0, 0, 0, 0, 0)
+            """,
+            (
+                str(report.run_id),
+                str(report.runner_id),
+                dbmod.utc_stamp(),
+            ),
+        )
         for entry in report.entries:
             conn.execute(
                 dbmod.UPSERT_EXIT,

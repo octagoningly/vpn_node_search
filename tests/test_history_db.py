@@ -9,7 +9,9 @@ from nodebench.core.errors import StorageError
 from nodebench.core.schema import (
     EdgeEndpoint,
     EndpointProbeResult,
+    ExitObservation,
     HistorySummary,
+    IntelligenceReport,
     ProbeMode,
     ProbeStatus,
     ProxyNode,
@@ -18,7 +20,12 @@ from nodebench.core.schema import (
 )
 from nodebench.history.db import open_db
 from nodebench.history.stats import history_for_items, prune_runs, source_quality
-from nodebench.history.store import decode_probe_results, load_entities, persist_run
+from nodebench.history.store import (
+    decode_probe_results,
+    load_entities,
+    persist_run,
+    record_intelligence,
+)
 
 TABLES = (
     "schema_migrations",
@@ -472,5 +479,40 @@ def test_persist_rejects_bad_window(tmp_path: Path):
                 min_samples=3,
                 now=NOW,
             )
+    finally:
+        conn.close()
+
+
+def test_record_intelligence_creates_run_row_before_exits(tmp_path: Path):
+    db_path = tmp_path / "nodebench.db"
+    # create schema without inserting this run (inspect runs before persist)
+    open_db(db_path).close()
+    report = IntelligenceReport(
+        run_id=RUN1,
+        runner_id="local:desktop-a",
+        entries=[
+            ExitObservation(
+                item_id="node-1",
+                exit_ip="203.0.113.9",
+                status="ok",
+                country_code="JP",
+            )
+        ],
+    )
+    written = record_intelligence(db_path, report)
+    assert written == 1
+    conn = open_db(db_path)
+    try:
+        run = conn.execute(
+            "SELECT run_id, status FROM runs WHERE run_id = ?", (RUN1,)
+        ).fetchone()
+        assert run is not None
+        assert run["run_id"] == RUN1
+        exit_row = conn.execute(
+            "SELECT exit_ip, country_code FROM exit_observations WHERE run_id = ?",
+            (RUN1,),
+        ).fetchone()
+        assert exit_row["exit_ip"] == "203.0.113.9"
+        assert exit_row["country_code"] == "JP"
     finally:
         conn.close()
