@@ -20,11 +20,12 @@ if (-not $git) {
 Push-Location $root
 try {
     Write-Output "==> 1/2 run nodebench --profile $profileName (local speed test)"
+    Write-Output "    请稍候：联网搜集候选 + 实测约 3-10 分钟，期间无输出属正常..."
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
     & uv run nodebench run --profile $profileName
     $code = $LASTEXITCODE
-    if ($code -ne 0) {
-        Write-Output "nodebench exit=$code (0=ok, 2=config, 3=sources, 4=probe, 5=export)"
-    }
+    $sw.Stop()
+    Write-Output ("    测速耗时 {0:N1} 分钟，exit={1}" -f $sw.Elapsed.TotalMinutes, $code)
 
     $staging = Join-Path $root "output\publish-staging"
     if (-not (Test-Path -LiteralPath $staging)) {
