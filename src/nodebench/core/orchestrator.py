@@ -15,6 +15,7 @@ from nodebench.core.errors import (
     EXIT_SOURCES,
 )
 from nodebench.core.schema import SCHEMA_VERSION, ParseIssue, ProbeMode, ProbeStatus
+from nodebench.core.protocol_support import support_report
 from nodebench.core.serialization import public_dump
 from nodebench.core.stages import register_node_secrets, run_post_stages
 from nodebench.normalize import dedupe, normalize_all
@@ -54,6 +55,7 @@ PROXY_PREVIEW_FIELDS = (
     "item_id",
     "kind",
     "protocol",
+    "protocol_support",
     "port",
     "transport",
     "security",
@@ -503,6 +505,7 @@ def run_pipeline(
         "status": status,
         "diagnostics": _diagnostics(reports, collected_issues),
         "counts": counts,
+        "protocol_support": support_report(final_proxies, proxy_results),
         "limits": _limits(config, reports),
         "source_reports": reports,
         "issues": collected_issues,

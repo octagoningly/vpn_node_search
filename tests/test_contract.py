@@ -31,6 +31,7 @@ TOP_LEVEL_KEYS = {
     "status",
     "diagnostics",
     "counts",
+    "protocol_support",
     "limits",
     "source_reports",
     "issues",

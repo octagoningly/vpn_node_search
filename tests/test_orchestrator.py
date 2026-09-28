@@ -33,6 +33,7 @@ PROXY_PREVIEW_KEYS = {
     "item_id",
     "kind",
     "protocol",
+    "protocol_support",
     "port",
     "transport",
     "security",

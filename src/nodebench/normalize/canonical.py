@@ -3,6 +3,7 @@ from __future__ import annotations
 from nodebench.core.schema import (
     FINGERPRINT_VERSION,
     EdgeEndpoint,
+    ProtocolSupport,
     ProxyNode,
 )
 from nodebench.normalize.fingerprint import fingerprint_endpoint, fingerprint_proxy
@@ -48,6 +49,11 @@ def normalize_proxy(parsed, source_id=""):
     params = _mapping(_field(parsed, "params", {}))
     secrets = _mapping(_field(parsed, "secrets", {}))
     remarks = str(_field(parsed, "remarks", "") or "")
+    support = _field(parsed, "protocol_support", None)
+    try:
+        protocol_support = ProtocolSupport(support) if support is not None else ProtocolSupport.PARSE_ONLY
+    except ValueError:
+        protocol_support = ProtocolSupport.PARSE_ONLY
     fingerprint = fingerprint_proxy(
         {
             "protocol": protocol,
@@ -74,6 +80,7 @@ def normalize_proxy(parsed, source_id=""):
         remarks=remarks,
         source_ids=[owner] if owner else [],
         raw_refs=[],
+        protocol_support=protocol_support,
     )
     return node, None
 

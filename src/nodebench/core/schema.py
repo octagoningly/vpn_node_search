@@ -35,6 +35,21 @@ class Kind(str, Enum):
     EDGE_ENDPOINT = "edge_endpoint"
 
 
+class ProtocolSupport(str, Enum):
+    """How far a protocol's detection capability has been verified.
+
+    判定规则（开发规则 §1 交付阶段）：某协议只有在真实连通测试通过后
+    才能标为 ``probe_supported``（支持检测），否则标为 ``parse_only``
+    （可解析）。解析/规范化阶段一律先标 ``parse_only``；只有当次运行
+    出现该协议 ``probe_mode=real`` 且 ``status=ok`` 的探测证据后，
+    报告中的协议级别才能提升为 ``probe_supported``。TCP 入口可达、
+    模拟（simulated）或未执行（not_run）结果均不构成证据。
+    """
+
+    PARSE_ONLY = "parse_only"
+    PROBE_SUPPORTED = "probe_supported"
+
+
 class ErrorInfo(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -110,6 +125,8 @@ class ParsedProxy(BaseModel):
     params: dict[str, Any] = Field(default_factory=dict)
     secrets: dict[str, str] = Field(default_factory=dict, repr=False)
     remarks: str = ""
+    # parse_only until a real connectivity test passes for this protocol.
+    protocol_support: ProtocolSupport = ProtocolSupport.PARSE_ONLY
 
 
 class ParsedEndpoint(BaseModel):
@@ -141,6 +158,8 @@ class ProxyNode(BaseModel):
     remarks: str = ""
     source_ids: list[str] = Field(default_factory=list)
     raw_refs: list[str] = Field(default_factory=list)
+    # parse_only until a real connectivity test passes for this protocol.
+    protocol_support: ProtocolSupport = ProtocolSupport.PARSE_ONLY
 
 
 class EdgeEndpoint(BaseModel):
@@ -748,6 +767,7 @@ __all__ = [
     "PUBLIC_VISIBILITY",
     "Status",
     "Kind",
+    "ProtocolSupport",
     "ErrorInfo",
     "RunContext",
     "RawItem",
