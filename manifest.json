@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
-  "run_id": "20260928T110905Z-cd060e",
+  "run_id": "20260928T113719Z-84a54e",
   "runner_id": "local:desktop-a",
   "profile": "auto-collect",
-  "generated_at": "2026-09-28T11:14:14Z",
+  "generated_at": "2026-09-28T11:43:21Z",
   "status": "partial",
   "scoring_version": "2",
   "validation": {
@@ -22,26 +22,26 @@
   "files": [
     {
       "name": "cf-addapi.txt",
-      "sha256": "6ac4c6ddec366878b421e4ef59fffc3adf3215eac2523c9aef4ebaa64c5ee48d",
-      "size_bytes": 142,
-      "entry_count": 4
+      "sha256": "d6bfc9f870e2fc5399e1929adb83cc0df650717b3f6100b77a0e8754e0fb2f89",
+      "size_bytes": 958,
+      "entry_count": 26
     },
     {
       "name": "cf-addcsv.csv",
-      "sha256": "592e66d1a692b980357fdcdf1369259abe98717a5d8c6902d6a45169f5748b4d",
-      "size_bytes": 242,
-      "entry_count": 4
+      "sha256": "47d4e6582386ce17f087f6ed7c44d83acb72559b75b83afd1f37cbd7f0dd23fa",
+      "size_bytes": 1154,
+      "entry_count": 26
     },
     {
       "name": "report.json",
-      "sha256": "26e107e6228df3930fe574ed7089c0c269ff85e42f73d5787a372128ed6c41f7",
-      "size_bytes": 15671,
+      "sha256": "46834cac22dfa37a99c26c33a921e99df0d10d830a8315daabfc348515fb7828",
+      "size_bytes": 17504,
       "entry_count": 0
     }
   ],
   "counts": {
     "proxies": 0,
-    "endpoints": 4,
+    "endpoints": 26,
     "files": 4,
     "skipped": 0
   }

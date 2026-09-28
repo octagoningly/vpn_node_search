@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
-  "run_id": "20260928T110905Z-cd060e",
+  "run_id": "20260928T113719Z-84a54e",
   "runner_id": "local:desktop-a",
   "profile": "auto-collect",
-  "generated_at": "2026-09-28T11:14:14Z",
+  "generated_at": "2026-09-28T11:43:21Z",
   "dry_run": false,
   "stages_pending": [],
   "stages": {
@@ -18,29 +18,29 @@
         "reputation_unknown": 0
       },
       "persisted": 0,
-      "report": "D:\\study\\AI\\vpn_node_search\\output\\20260928T110905Z-cd060e\\intelligence-report.json"
+      "report": "D:\\study\\AI\\vpn_node_search\\output\\20260928T113719Z-84a54e\\intelligence-report.json"
     },
     "persist": {
       "status": "ok",
       "reason": "",
       "database": "D:\\study\\AI\\vpn_node_search\\output\\nodebench.db",
       "runs": 1,
-      "sources": 10,
+      "sources": 11,
       "items": 2294,
       "observations": 2294,
       "pruned": 0,
       "source_quality": [
         {
           "source_id": "cf",
-          "runs_seen": 10,
-          "ok_runs": 10,
-          "fetched_total": 10,
+          "runs_seen": 11,
+          "ok_runs": 11,
+          "fetched_total": 11,
           "error_total": 0
         },
         {
           "source_id": "github",
-          "runs_seen": 6,
-          "ok_runs": 6,
+          "runs_seen": 7,
+          "ok_runs": 7,
           "fetched_total": 0,
           "error_total": 0
         },
@@ -53,9 +53,9 @@
         },
         {
           "source_id": "subscriptions",
-          "runs_seen": 6,
-          "ok_runs": 5,
-          "fetched_total": 6,
+          "runs_seen": 7,
+          "ok_runs": 6,
+          "fetched_total": 7,
           "error_total": 2
         }
       ],
@@ -66,16 +66,16 @@
       "counts": {
         "proxies": 0,
         "endpoints": 2294,
-        "ranked": 4,
-        "filtered": 395,
-        "pending": 1895,
+        "ranked": 26,
+        "filtered": 2258,
+        "pending": 10,
         "issues": 0
       },
       "issues": []
     },
     "export": {
       "status": "ok",
-      "directory": "D:\\study\\AI\\vpn_node_search\\output\\20260928T110905Z-cd060e\\export",
+      "directory": "D:\\study\\AI\\vpn_node_search\\output\\20260928T113719Z-84a54e\\export",
       "errors": [],
       "validation": {
         "ok": true,
@@ -90,7 +90,7 @@
       "publishable": true,
       "counts": {
         "proxies": 0,
-        "endpoints": 4,
+        "endpoints": 26,
         "files": 6,
         "skipped": 0
       },
@@ -137,12 +137,17 @@
   ],
   "status": "partial",
   "diagnostics": [
-    "github:fetch_failed: GitHub search failed: network error for [redacted-url]: [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)",
-    "github:offline_fallback: network failure; falling back to offline simulation"
+    "subscriptions:timeout: subscription fetch failed: request timed out: [redacted-url]",
+    "subscriptions:stale_cache: retaining last successful cached content (stale, not for publish)",
+    "subscriptions:timeout: subscription fetch failed: request timed out: [redacted-url]",
+    "subscriptions:stale_cache: retaining last successful cached content (stale, not for publish)",
+    "subscriptions:timeout: subscription fetch failed: request timed out: [redacted-url]",
+    "subscriptions:stale_cache: retaining last successful cached content (stale, not for publish)",
+    "github:missing_token: GITHUB_TOKEN is not set; degrading to offline simulation"
   ],
   "counts": {
-    "sources_total": 10,
-    "sources_failed": 1,
+    "sources_total": 11,
+    "sources_failed": 4,
     "raw_items": 4,
     "parsed_proxies": 0,
     "parsed_endpoints": 2327,
@@ -167,6 +172,9 @@
     },
     "truncated_sources": [],
     "failed_sources": [
+      "subscriptions",
+      "subscriptions",
+      "subscriptions",
       "github"
     ],
     "disabled_sources": [
@@ -187,9 +195,22 @@
     },
     {
       "source_id": "subscriptions",
-      "ok": true,
+      "ok": false,
       "fetched": 1,
-      "errors": [],
+      "errors": [
+        {
+          "stage": "collect",
+          "code": "timeout",
+          "message_redacted": "subscription fetch failed: request timed out: [redacted-url]",
+          "retryable": true
+        },
+        {
+          "stage": "collect",
+          "code": "stale_cache",
+          "message_redacted": "retaining last successful cached content (stale, not for publish)",
+          "retryable": true
+        }
+      ],
       "scope": "sub:5df170d69a553e1a",
       "redacted": true,
       "mode": "real",
@@ -198,9 +219,22 @@
     },
     {
       "source_id": "subscriptions",
-      "ok": true,
+      "ok": false,
       "fetched": 1,
-      "errors": [],
+      "errors": [
+        {
+          "stage": "collect",
+          "code": "timeout",
+          "message_redacted": "subscription fetch failed: request timed out: [redacted-url]",
+          "retryable": true
+        },
+        {
+          "stage": "collect",
+          "code": "stale_cache",
+          "message_redacted": "retaining last successful cached content (stale, not for publish)",
+          "retryable": true
+        }
+      ],
       "scope": "sub:ba02c7ec0ff9d78c",
       "redacted": true,
       "mode": "real",
@@ -209,9 +243,22 @@
     },
     {
       "source_id": "subscriptions",
-      "ok": true,
+      "ok": false,
       "fetched": 1,
-      "errors": [],
+      "errors": [
+        {
+          "stage": "collect",
+          "code": "timeout",
+          "message_redacted": "subscription fetch failed: request timed out: [redacted-url]",
+          "retryable": true
+        },
+        {
+          "stage": "collect",
+          "code": "stale_cache",
+          "message_redacted": "retaining last successful cached content (stale, not for publish)",
+          "retryable": true
+        }
+      ],
       "scope": "sub:dfbb28e59c03d292",
       "redacted": true,
       "mode": "real",
@@ -225,17 +272,22 @@
       "errors": [
         {
           "stage": "collect",
-          "code": "fetch_failed",
-          "message_redacted": "GitHub search failed: network error for [redacted-url]: [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)",
-          "retryable": true
-        },
-        {
-          "stage": "collect",
-          "code": "offline_fallback",
-          "message_redacted": "network failure; falling back to offline simulation",
+          "code": "missing_token",
+          "message_redacted": "GITHUB_TOKEN is not set; degrading to offline simulation",
           "retryable": true
         }
       ],
+      "scope": "filename:addressesapi.txt; filename:addressescsv.csv; filename:cf-addapi.txt; filename:addressesipv6api.txt; \"IP地址\" filename:addressescsv.csv; filename:ip.txt CloudflareSpeedTest",
+      "redacted": true,
+      "mode": "offline",
+      "etag": "",
+      "last_modified": ""
+    },
+    {
+      "source_id": "github",
+      "ok": true,
+      "fetched": 0,
+      "errors": [],
       "scope": "filename:addressesapi.txt",
       "redacted": true,
       "mode": "offline",
@@ -320,14 +372,14 @@
       "backend": "cfst",
       "backend_version": "",
       "skipped_reason": "",
-      "attempted": 400,
-      "ok": 8,
-      "failed": 1,
-      "timeout": 373,
+      "attempted": 2284,
+      "ok": 78,
+      "failed": 0,
+      "timeout": 2156,
       "measurement_error": 0,
-      "incompatible": 18,
-      "usable_real": 8,
-      "skipped": 1894,
+      "incompatible": 50,
+      "usable_real": 78,
+      "skipped": 10,
       "simulated_results": 0
     }
   },
@@ -345,7 +397,7 @@
           "subscriptions"
         ],
         "remarks": "",
-        "probe_status": "skipped"
+        "probe_status": "timeout"
       },
       {
         "item_id": "hmac-sha256:00162691ed3deefbbe48a396c4b90a1cd4b4376cd2adf5568413f4e0172d6386",
@@ -358,7 +410,7 @@
           "subscriptions"
         ],
         "remarks": "",
-        "probe_status": "skipped"
+        "probe_status": "timeout"
       },
       {
         "item_id": "hmac-sha256:005490de574402f13a255d33a649d1021bb8ad853141742e1f5751067822d22f",
@@ -371,7 +423,7 @@
           "subscriptions"
         ],
         "remarks": "",
-        "probe_status": "skipped"
+        "probe_status": "timeout"
       },
       {
         "item_id": "hmac-sha256:005768a115d9fb27e2e89ae52e347c6690c8e5a716c57ba0b938601bb4f0323d",
@@ -384,7 +436,7 @@
           "subscriptions"
         ],
         "remarks": "",
-        "probe_status": "skipped"
+        "probe_status": "timeout"
       },
       {
         "item_id": "hmac-sha256:005e8d65b20a3ea5f0c04e1efb06a3e0cfd459b17586ca0a1c162f60068c48b6",
@@ -410,7 +462,7 @@
           "subscriptions"
         ],
         "remarks": "",
-        "probe_status": "skipped"
+        "probe_status": "ok"
       },
       {
         "item_id": "hmac-sha256:007a83b20eab6655bd5a3909da24b9fd418355efbb71894a662a342fef068db5",
@@ -436,7 +488,7 @@
           "subscriptions"
         ],
         "remarks": "",
-        "probe_status": "skipped"
+        "probe_status": "timeout"
       },
       {
         "item_id": "hmac-sha256:009719a6f6fd01f4dbdc10f932c851b5321f8998ec0ee6313a5cc78c5d088e81",
@@ -449,7 +501,7 @@
           "subscriptions"
         ],
         "remarks": "",
-        "probe_status": "skipped"
+        "probe_status": "timeout"
       },
       {
         "item_id": "hmac-sha256:009981e884f23289a97a4e5d21603811cdf988ba03e69984071121a14646af1f",
@@ -475,7 +527,7 @@
           "subscriptions"
         ],
         "remarks": "",
-        "probe_status": "skipped"
+        "probe_status": "timeout"
       },
       {
         "item_id": "hmac-sha256:00ef6b117922f5b36cfd7bb82b26e7f2373de8e466a1b0ae8dde87ae63df8ed6",
@@ -488,7 +540,7 @@
           "subscriptions"
         ],
         "remarks": "",
-        "probe_status": "skipped"
+        "probe_status": "timeout"
       },
       {
         "item_id": "hmac-sha256:0166b841b2276a4abf5df1c2e35103d4fd8962594aa12f6b5abf91f923dff196",
@@ -501,7 +553,7 @@
           "subscriptions"
         ],
         "remarks": "",
-        "probe_status": "skipped"
+        "probe_status": "timeout"
       },
       {
         "item_id": "hmac-sha256:01c2a81749d252b385def91b014bcf2cc145971160f72a8478daed2cba06d3f1",
@@ -514,7 +566,7 @@
           "subscriptions"
         ],
         "remarks": "",
-        "probe_status": "skipped"
+        "probe_status": "timeout"
       },
       {
         "item_id": "hmac-sha256:01dbc927b51c5c4ae6e8e4f0ff7b6d0c7ce8fd764e7f88af90d797423b45b86f",
@@ -527,7 +579,7 @@
           "subscriptions"
         ],
         "remarks": "",
-        "probe_status": "skipped"
+        "probe_status": "timeout"
       },
       {
         "item_id": "hmac-sha256:01def343d0a99aac9c0d0b6d053c83b0db80ccb8c0bbfbaae9ab8c697cd249f1",
@@ -540,7 +592,7 @@
           "subscriptions"
         ],
         "remarks": "",
-        "probe_status": "skipped"
+        "probe_status": "timeout"
       },
       {
         "item_id": "hmac-sha256:01e21ca98f1fcf02ad3c9044752472394b3bb02474d1c4d8733428b8e7ed6c91",
@@ -553,7 +605,7 @@
           "subscriptions"
         ],
         "remarks": "",
-        "probe_status": "skipped"
+        "probe_status": "timeout"
       },
       {
         "item_id": "hmac-sha256:01f208b77fa96325ecd7a365520e07c52b27ecc4a3c06422366f711c9df5991c",
@@ -579,7 +631,7 @@
           "subscriptions"
         ],
         "remarks": "",
-        "probe_status": "skipped"
+        "probe_status": "ok"
       },
       {
         "item_id": "hmac-sha256:02589270e04ba5ae7ca9701ade1ac04536160fa5adf83e3a98663e0e9c157818",
@@ -592,7 +644,7 @@
           "subscriptions"
         ],
         "remarks": "",
-        "probe_status": "skipped"
+        "probe_status": "timeout"
       }
     ]
   }
