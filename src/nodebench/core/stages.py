@@ -243,7 +243,6 @@ def run_export_stage(
         endpoints=score_report.endpoints,
         scoring_version=SCORING_VERSION,
         cf_candidates_authorized=bool(config.publish.cf_candidates_authorized),
-        dls_min_speed_mb_s=float(config.scoring.filters.min_speed_mb_s),
     )
 
 
@@ -519,7 +518,6 @@ def export_artifacts(config: AppConfig, run_id: str) -> ExportOutcome:
         endpoints=score_report.endpoints,
         scoring_version=SCORING_VERSION,
         cf_candidates_authorized=bool(config.publish.cf_candidates_authorized),
-        dls_min_speed_mb_s=float(config.scoring.filters.min_speed_mb_s),
     )
 
 
