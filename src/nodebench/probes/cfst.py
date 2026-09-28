@@ -517,6 +517,7 @@ class CfstProber:
         self._metrics_error: BaseException | None = None
         self._version_cache: str | None = None
         self._version_lock = threading.Lock()
+        self._resolved_ips: dict[tuple[str, int], str] = {}
 
     @property
     def probe_config(self) -> Any:
@@ -634,6 +635,29 @@ class CfstProber:
             for row in rows:
                 self._metrics[(row.ip, port)] = row
 
+    def _resolve_target_ip(self, target: EndpointTarget) -> str | None:
+        """Return a literal IP for CFST input; resolve hostnames once (bounded)."""
+        key = (str(target.address).strip().lower(), int(target.port))
+        if key in self._resolved_ips:
+            return self._resolved_ips[key] or None
+        text = str(target.address).strip().strip("[]")
+        ip: str | None = None
+        if _is_ip(text):
+            ip = normalize_ip(text)
+        else:
+            try:
+                infos = socket.getaddrinfo(
+                    text, int(target.port), socket.AF_UNSPEC, socket.SOCK_STREAM
+                )
+                for info in infos:
+                    ip = normalize_ip(info[4][0])
+                    if ip:
+                        break
+            except OSError:
+                ip = None
+        self._resolved_ips[key] = ip or ""
+        return ip
+
     def _run_cfst(
         self, group: Sequence[EndpointTarget], port: int
     ) -> list[CsvRow]:
@@ -644,7 +668,14 @@ class CfstProber:
                 retryable=False,
             )
         self.run_dir.mkdir(parents=True, exist_ok=True)
-        ips = sorted({normalize_ip(target.address) for target in group})
+        resolved: dict[str, EndpointTarget] = {}
+        for target in group:
+            ip = self._resolve_target_ip(target)
+            if ip:
+                resolved.setdefault(ip, target)
+        if not resolved:
+            return []
+        ips = sorted(resolved)
         ip_file = self.run_dir / f"cfst-{port}.ips.txt"
         csv_file = self.run_dir / f"cfst-{port}.result.csv"
         ip_file.write_text("\n".join(ips) + "\n", encoding="utf-8")
@@ -691,6 +722,12 @@ class CfstProber:
             status, stage, code, message, timeouts = self._metrics_outcome()
             notes["metrics_error"] = True
         row = self._metrics.get((normalize_ip(target.address), int(target.port)))
+        if row is None:
+            ip = self._resolved_ips.get(
+                (str(target.address).strip().lower(), int(target.port))
+            ) or self._resolve_target_ip(target)
+            if ip:
+                row = self._metrics.get((ip, int(target.port)))
         if status is ProbeStatus.OK and row is None:
             notes["metrics_missing"] = True
 
