@@ -71,7 +71,7 @@ def test_iptest_csv_uses_ip_and_port_columns(tmp_path: Path):
         "198.51.100.42,2053,80,true,东京,JP,Tokyo,21.4,6.35\n",
     )
     items, reports = collect_cf(cf_config("input/candidates.csv"), base_dir=tmp_path)
-    assert items[0].content_type == "csv"
+    assert items[0].content_type == "endpoint_list"
     assert items[0].payload == "192.0.2.81:443\n198.51.100.42:2053"
     assert "7.82" not in items[0].payload
     assert "6.35" not in items[0].payload
@@ -86,7 +86,7 @@ def test_speedtest_csv_without_port_column_defaults_to_443(tmp_path: Path):
         "192.0.2.90,4,4,0.00,12.34,6.78,HK\n",
     )
     items, reports = collect_cf(cf_config("input/speed.csv"), base_dir=tmp_path)
-    assert items[0].content_type == "csv"
+    assert items[0].content_type == "endpoint_list"
     assert items[0].payload == "192.0.2.90:443"
     assert reports[0].ok is True
 
@@ -209,7 +209,7 @@ def test_budget_is_shared_across_candidate_files(tmp_path: Path):
 def test_project_candidate_samples_are_importable():
     config = cf_config("input/cf-candidates.txt", "input/cf-candidates.csv")
     items, reports = collect_cf(config, base_dir=PROJECT_ROOT)
-    assert [item.content_type for item in items] == ["endpoint_list", "csv"]
+    assert [item.content_type for item in items] == ["endpoint_list", "endpoint_list"]
     report = reports[0]
     assert report.ok is True
     assert report.errors == []

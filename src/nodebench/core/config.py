@@ -93,6 +93,24 @@ class CfSourceConfig(BaseModel):
     max_ips_per_run: int = 200
 
 
+
+class CandidateImportConfig(BaseModel):
+    """Dual-runtime import of already sorted / speed-tested candidate lists.
+
+    Actions (or any other runner) can publish an ADDAPI txt or ADDCSV csv
+    list; this machine imports it as CF candidates without re-running the
+    remote collection. Historical remarks and speed values are kept as
+    historical reference only.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    files: list[str] = Field(default_factory=list)
+    license_tag: str = "user_supplied"
+    max_ips_per_run: int = 200
+
+
 class SourcesConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -102,6 +120,9 @@ class SourcesConfig(BaseModel):
     )
     github: GithubSourceConfig = Field(default_factory=GithubSourceConfig)
     cf: CfSourceConfig = Field(default_factory=CfSourceConfig)
+    candidate_import: CandidateImportConfig = Field(
+        default_factory=CandidateImportConfig
+    )
 
 
 class ProxyProbeConfig(BaseModel):
@@ -666,6 +687,7 @@ __all__ = [
     "SubscriptionSourceConfig",
     "GithubSourceConfig",
     "CfSourceConfig",
+    "CandidateImportConfig",
     "SourcesConfig",
     "ProxyProbeConfig",
     "CfProbeConfig",

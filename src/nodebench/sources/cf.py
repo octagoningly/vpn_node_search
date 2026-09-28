@@ -324,11 +324,11 @@ def collect_cf(
             continue
         added, budget, truncated = _expand_candidates(entries, budget, default_port, seen)
         if added:
-            suffix = path.suffix.lower()
+            # Expanded payload is always HOST:PORT lines, never a CSV body.
             items.append(
                 RawItem(
                     source_id=SOURCE_ID,
-                    content_type="csv" if (has_header or suffix == ".csv") else "endpoint_list",
+                    content_type="endpoint_list",
                     payload="\n".join(added),
                     fetched_at=fetched_at,
                     license_tag=license_tag,

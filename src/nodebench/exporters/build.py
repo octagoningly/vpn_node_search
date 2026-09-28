@@ -18,6 +18,7 @@ from nodebench.core.schema import (
 from nodebench.core.serialization import dumps_json, public_dump, write_json_atomic
 from nodebench.exporters.cf_addapi import CF_ADDAPI_NAME, build_addapi
 from nodebench.exporters.cf_addcsv import CF_ADDCSV_NAME, build_addcsv
+from nodebench.exporters.consumer_hints import build_consumer_hints
 from nodebench.exporters.clash import PROXY_CLASH_NAME, build_clash_config, build_clash_proxy
 from nodebench.exporters.manifest import MANIFEST_NAME, build_manifest
 from nodebench.exporters.raw import PROXY_RAW_NAME, build_raw_text
@@ -114,6 +115,7 @@ def build_export(
     scoring_version: str,
     region_by_item: Mapping[str, str] | None = None,
     cf_candidates_authorized: bool = False,
+    dls_min_speed_mb_s: float | None = None,
 ) -> ExportOutcome:
     """Write the private export directory for one run and describe it.
 
@@ -166,15 +168,19 @@ def build_export(
 
     api_rows: list[tuple[str, int, str]] = []
     csv_rows: list[list[Any]] = []
+    measured_endpoints = 0
     for edge, ranked in edge_rows:
         remark = str(edge.remarks or "") or str(regions.get(edge.item_id, "") or "")
         api_rows.append((edge.address, int(edge.port), remark))
         params = edge.params or {}
+        origin_port = params.get("origin_port", "")
+        if ranked.latency_ms is not None or ranked.speed_mb_s is not None:
+            measured_endpoints += 1
         csv_rows.append(
             [
                 edge.address,
                 int(edge.port),
-                "",
+                "" if origin_port is None else origin_port,
                 edge.tls,
                 params.get("datacenter", ""),
                 params.get("region", ""),
@@ -224,6 +230,11 @@ def build_export(
     pending = stage_report.get("stages_pending")
     if isinstance(pending, list):
         stage_report["stages_pending"] = [item for item in pending if item != "export"]
+    stage_report["consumer_hints"] = build_consumer_hints(
+        dls_min_speed_mb_s=dls_min_speed_mb_s,
+        endpoint_count=len(edge_rows),
+        measured_endpoint_count=measured_endpoints,
+    )
 
     stages["export"] = stage_view(
         _outcome(

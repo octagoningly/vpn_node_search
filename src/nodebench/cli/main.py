@@ -77,6 +77,10 @@ def _load(
     if input_path:
         overrides["sources.local.enabled"] = True
         overrides["sources.local.paths"] = [str(input_path)]
+    import_files = getattr(args, "import_candidates", None)
+    if import_files:
+        overrides["sources.candidate_import.enabled"] = True
+        overrides["sources.candidate_import.files"] = [str(item) for item in import_files]
     output_dir = getattr(args, "output_dir", None)
     if output_dir:
         overrides["output_dir"] = str(output_dir)
@@ -723,6 +727,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run_parser.add_argument("--input", default=None, help="input file or directory")
     run_parser.add_argument(
+        "--import-candidates",
+        action="append",
+        default=None,
+        metavar="PATH",
+        help=(
+            "import a sorted/measured ADDAPI txt or ADDCSV csv list "
+            "as source_id=imported CF candidates (repeatable)"
+        ),
+    )
+    run_parser.add_argument(
         "--output-dir", default=None, help="directory that receives run reports"
     )
     run_parser.add_argument(
@@ -775,6 +789,17 @@ def build_parser() -> argparse.ArgumentParser:
                 action="store_true",
                 default=argparse.SUPPRESS,
                 help="print a traceback for unexpected errors",
+            )
+        if name == "collect":
+            stage_parser.add_argument(
+                "--import-candidates",
+                action="append",
+                default=None,
+                metavar="PATH",
+                help=(
+                    "import a sorted/measured ADDAPI txt or ADDCSV csv list "
+                    "as source_id=imported CF candidates (repeatable)"
+                ),
             )
         if name == "probe":
             stage_parser.add_argument(

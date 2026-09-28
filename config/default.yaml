@@ -26,6 +26,11 @@ sources:
     enabled: false
     candidate_files: []
     max_ips_per_run: 200
+  candidate_import:
+    enabled: false
+    files: []
+    license_tag: user_supplied
+    max_ips_per_run: 200
 probe:
   proxy:
     enabled: true

@@ -8,6 +8,7 @@ from nodebench.core.config import AppConfig
 from nodebench.core.context import redact
 from nodebench.core.schema import RawItem, SourceReport
 from nodebench.sources.base import CollectOutcome, make_error, resolve_base_dir
+from nodebench.sources.candidate_import import collect_candidate_import
 from nodebench.sources.cf import collect_cf
 from nodebench.sources.github import collect_github
 from nodebench.sources.local import collect_local
@@ -44,6 +45,11 @@ def _cf_outcome(config: AppConfig, base: Path) -> CollectOutcome:
     return CollectOutcome(items=cf_items, reports=cf_reports)
 
 
+def _import_outcome(config: AppConfig, base: Path) -> CollectOutcome:
+    items, reports = collect_candidate_import(config, base_dir=base)
+    return CollectOutcome(items=items, reports=reports)
+
+
 def collect_all(
     config: AppConfig, ctx: Any = None, base_dir: str | Path | None = None
 ) -> CollectOutcome:
@@ -62,6 +68,13 @@ def collect_all(
         _run_adapter(
             "cf",
             lambda: _cf_outcome(config, base),
+            items,
+            reports,
+        )
+    if config.sources.candidate_import.enabled:
+        _run_adapter(
+            "imported",
+            lambda: _import_outcome(config, base),
             items,
             reports,
         )

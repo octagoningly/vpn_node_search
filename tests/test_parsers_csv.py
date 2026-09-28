@@ -23,24 +23,35 @@ def test_cf_candidates_nine_columns():
     assert first.tls is True
     assert first.target_host == ""
     assert first.remarks == ""
-    assert set(first.params) == {"origin_port", "datacenter", "region", "city"}
-    assert first.params["origin_port"] == 443
+    assert set(first.params) == {
+        "origin_port",
+        "datacenter",
+        "region",
+        "city",
+        "historical_latency_ms",
+        "historical_speed_mb_s",
+    }
+    assert first.params["origin_port"] == 80
+    assert first.params["historical_latency_ms"] == 15.6
+    assert first.params["historical_speed_mb_s"] == 7.82
     assert first.params["region"] == "HK"
     assert first.params["city"] == "Hong Kong"
     assert endpoints[2].tls is False
     assert endpoints[2].address == "203.0.113.7"
 
 
-def test_latency_and_speed_never_stored():
+def test_latency_and_speed_stay_historical_not_measurements():
     text = (PROJECT_ROOT / "input" / "cf-candidates.csv").read_text(encoding="utf-8")
     endpoints, issues = parse_endpoint_csv(text, SRC)
     assert issues == []
     for node in endpoints:
-        dumped = str(node.model_dump())
-        assert "15.6" not in dumped
-        assert "7.82" not in dumped
-        assert "TCP延迟" not in dumped
-        assert "速度" not in dumped
+        dumped = node.model_dump()
+        assert "latency_ms" not in dumped
+        assert "speed_mb_s" not in dumped
+        assert set(node.params) & {"historical_latency_ms", "historical_speed_mb_s"}
+        for key, value in node.params.items():
+            if key.startswith("historical_"):
+                assert isinstance(value, float)
 
 
 def test_ip_port_header():

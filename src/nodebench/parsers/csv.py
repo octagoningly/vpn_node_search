@@ -25,6 +25,11 @@ HEADER_FULL = [
 ]
 HEADER_TWO = ["ip", "port"]
 
+# Historical measurements live in ``params`` only. They must never be copied
+# into this-run measurement fields (RankedEndpoint.latency_ms / speed_mb_s).
+HISTORICAL_LATENCY_KEY = "historical_latency_ms"
+HISTORICAL_SPEED_KEY = "historical_speed_mb_s"
+
 _TRUE = frozenset({"true", "1", "yes", "t", "y"})
 _FALSE = frozenset({"false", "0", "no", "f", "n"})
 
@@ -32,8 +37,18 @@ _FALSE = frozenset({"false", "0", "no", "f", "n"})
 def _clean_cells(row):
     cells = [str(cell).strip() for cell in row]
     if cells:
-        cells[0] = cells[0].lstrip("﻿")
+        cells[0] = cells[0].lstrip("\ufeff")
     return cells
+
+
+def _maybe_float(value):
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        return float(text)
+    except ValueError:
+        return None
 
 
 def _split_bracket(value):
@@ -85,11 +100,10 @@ def _parse_tls(value):
 
 def _params_from_nine(cells):
     params = {}
-    origin_port = parse_port(cells[1])
-    if origin_port is None:
-        params["origin_port"] = cells[1]
-    else:
-        params["origin_port"] = origin_port
+    origin_text = cells[2]
+    if origin_text:
+        origin_port = parse_port(origin_text)
+        params["origin_port"] = origin_port if origin_port is not None else origin_text
     for key, value in (
         ("datacenter", cells[4]),
         ("region", cells[5]),
@@ -97,6 +111,12 @@ def _params_from_nine(cells):
     ):
         if value:
             params[key] = value
+    latency = _maybe_float(cells[7])
+    if latency is not None:
+        params[HISTORICAL_LATENCY_KEY] = latency
+    speed = _maybe_float(cells[8])
+    if speed is not None:
+        params[HISTORICAL_SPEED_KEY] = speed
     return params
 
 
@@ -182,8 +202,32 @@ def parse_endpoint_csv(text, source_id=""):
     return endpoints, issues
 
 
+def _split_remark(line):
+    text = str(line).strip()
+    if "#" not in text:
+        return text, ""
+    head, _, remark = text.partition("#")
+    return head.strip(), remark.strip()
+
+
+def _parse_addapi_token(token):
+    """Parse HOST, HOST:PORT, [v6], or [v6]:PORT from an ADDAPI body."""
+    text = str(token).strip()
+    if text.startswith("["):
+        return _split_bracket(text)
+    if text.count(":") == 1:
+        host, _, tail = text.partition(":")
+        return host, tail
+    return text, None
+
+
 def parse_endpoint_lines(text, source_id=""):
-    """Parse ADDAPI-style lines: HOST[:PORT] (comments already stripped)."""
+    """Parse ADDAPI-style lines: HOST[:PORT][#remark].
+
+    IPv6 addresses use the bracketed form ``[v6]:port``. The ``#`` suffix is
+    the WorkerVless2sub remark alias, not a comment; whole-line comments still
+    start the line with ``#``.
+    """
     raw = "" if text is None else str(text)
     endpoints = []
     issues = []
@@ -192,11 +236,14 @@ def parse_endpoint_lines(text, source_id=""):
         if not line or line.startswith("#"):
             continue
         ref = "line:{0}".format(line_no)
-        host, embedded_port = _split_bracket(line)
-        port = parse_port(embedded_port) if embedded_port else None
-        if port is None and host and ":" in host and not host.startswith("["):
-            host, _, tail = host.partition(":")
-            port = parse_port(tail)
+        body, remark = _split_remark(line)
+        if not body:
+            issues.append(
+                make_issue(source_id, INVALID_ROW, "invalid endpoint host", ref)
+            )
+            continue
+        host, embedded_port = _parse_addapi_token(body)
+        port = parse_port(embedded_port) if embedded_port not in (None, "") else None
         if port is None:
             port = 443
         if not host or not _valid_ip(host):
@@ -212,7 +259,7 @@ def parse_endpoint_lines(text, source_id=""):
                 target_host="",
                 tls=True,
                 params={},
-                remarks="",
+                remarks=remark,
             )
         )
     return endpoints, issues
