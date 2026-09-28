@@ -1,4 +1,4 @@
-from nodebench.scoring.rank import make_geo_lookup, score_run
+from nodebench.scoring.rank import make_geo_lookup, make_risk_lookup, score_run
 from nodebench.scoring.rules import (
     PROXY_CRITICAL_DIMS,
     ENDPOINT_CRITICAL_DIMS,
@@ -15,6 +15,7 @@ from nodebench.scoring.rules import (
 
 __all__ = [
     "make_geo_lookup",
+    "make_risk_lookup",
     "score_run",
     "SCORING_VERSION",
     "SPEED_REF_MB_S",

@@ -28,6 +28,7 @@ from nodebench.intelligence.geo import (
     GeoResult,
     lookup_geo,
 )
+from nodebench.intelligence.reputation import make_reputation_provider
 from nodebench.scoring.rules import (
     CF_ANYCAST_NEUTRAL_RISK,
     SCORING_VERSION,
@@ -165,6 +166,63 @@ def make_geo_lookup(
             result = None
         cache[ip] = result
         return result
+
+    return _lookup
+
+
+def make_risk_lookup(
+    *,
+    enabled: bool,
+    timeout: float = 8.0,
+    max_cache: int = 256,
+) -> Callable[[str], float | None] | None:
+    """Bounded, cached AbuseIPDB risk resolver (0-100, higher = riskier).
+
+    Returns ``None`` when reputation is disabled or no API key is configured,
+    so scoring can fall back to its neutral default without inventing purity.
+    """
+    if not enabled:
+        return None
+    provider = make_reputation_provider(enabled=True, timeout=timeout)
+    if getattr(provider, "name", "") == "null":
+        return None
+    cache: dict[str, float | None] = {}
+
+    def _lookup(address: str) -> float | None:
+        text = str(address or "").strip()
+        if not text:
+            return None
+        ip = text if _is_ip(text) else None
+        if ip is None:
+            try:
+                infos = socket.getaddrinfo(
+                    text, None, socket.AF_UNSPEC, socket.SOCK_STREAM
+                )
+                for info in infos:
+                    candidate = str(info[4][0] or "").strip()
+                    if candidate and _is_ip(candidate):
+                        ip = candidate
+                        break
+            except OSError:
+                ip = None
+        if ip is None:
+            return None
+        if ip in cache:
+            return cache[ip]
+        if len(cache) >= max_cache:
+            cache.pop(next(iter(cache)), None)
+        try:
+            obs = provider.lookup("risk-lookup", ip)
+        except Exception:
+            obs = None
+        value = None
+        if obs is not None and getattr(obs, "risk", None) is not None:
+            try:
+                value = float(obs.risk)
+            except (TypeError, ValueError):
+                value = None
+        cache[ip] = value
+        return value
 
     return _lookup
 
@@ -441,6 +499,7 @@ def _score_endpoint(
     scoring: ScoringConfig,
     history_days: int,
     geo_lookup: Callable[[str], GeoResult | None] | None = None,
+    risk_lookup: Callable[[str], float | None] | None = None,
 ) -> RankedEndpoint:
     outcome, pending, filters_failed = _probe_gate(result, scoring)
     latency = speed = loss = None
@@ -477,7 +536,16 @@ def _score_endpoint(
             if resolved is not None:
                 country = resolved
 
-    risk, risk_source = _resolve_risk(edge.params, geo)
+    # Reputation first (AbuseIPDB), then params/geo heuristics, then neutral.
+    risk: float | None = None
+    risk_source = "unknown"
+    if risk_lookup is not None and outcome == "ok":
+        looked = risk_lookup(edge.address)
+        if looked is not None:
+            risk = float(looked)
+            risk_source = "reputation"
+    if risk is None:
+        risk, risk_source = _resolve_risk(edge.params, geo)
     if risk is None:
         # CF edge probing never fabricates "pure": unknown risk gets a
         # neutral default so speed/latency ranking can still proceed.
@@ -611,6 +679,7 @@ def score_run(
     history_days: int,
     generated_at: datetime | None = None,
     geo_lookup: Callable[[str], GeoResult | None] | None = None,
+    risk_lookup: Callable[[str], float | None] | None = None,
 ) -> ScoreReport:
     """Score and rank every entity against probe data, history and filters.
 
@@ -666,6 +735,7 @@ def score_run(
             scoring=scoring,
             history_days=history_days,
             geo_lookup=geo_lookup,
+            risk_lookup=risk_lookup,
         )
         for edge in edges
     ]

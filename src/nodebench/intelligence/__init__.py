@@ -3,6 +3,7 @@
 from nodebench.intelligence.exit_ip import ExitIpError, lookup_exit_ip
 from nodebench.intelligence.geo import GeoLookupError, GeoResult, lookup_geo
 from nodebench.intelligence.reputation import (
+    AbuseIPDBProvider,
     NullProvider,
     ReputationProvider,
     SimpleHttpReputationProvider,
@@ -13,6 +14,7 @@ from nodebench.intelligence.reputation import (
 from nodebench.intelligence.service import IntelligenceService
 
 __all__ = [
+    "AbuseIPDBProvider",
     "ExitIpError",
     "GeoLookupError",
     "GeoResult",

@@ -57,7 +57,7 @@ probe:
       - 443
     ip_family: "4"
 intelligence:
-  reputation_enabled: false
+  reputation_enabled: true
   echo_url: ""
   geo_url: "http://ip-api.com/json"
   reputation_url: ""

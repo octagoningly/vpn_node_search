@@ -1,6 +1,8 @@
 # 自动搜集：订阅源拉取公开优选列表 + GitHub 发现候选文件，再 CF 探测并发布
 profile: auto-collect
 runner_id: local:desktop-a
+intelligence:
+  reputation_enabled: true
 sources:
   local:
     enabled: false

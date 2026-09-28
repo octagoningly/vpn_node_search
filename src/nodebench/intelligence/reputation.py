@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -221,15 +222,206 @@ def make_reputation_provider(
     timeout: float = DEFAULT_TIMEOUT_S,
     provider_name: str = "",
 ) -> ReputationProvider:
-    """Return ``NullProvider`` when disabled, else a simple HTTP provider."""
+    """Return ``NullProvider`` when disabled, else a reputation provider.
+
+    Preference order:
+    1. ``ABUSEIPDB_KEY`` (or ``NODEBENCH_ABUSEIPDB_KEY``) → AbuseIPDB
+    2. configured HTTP URL → SimpleHttpReputationProvider
+    3. otherwise NullProvider (never invents a clean score)
+    """
     if not enabled:
         return NullProvider()
-    return SimpleHttpReputationProvider(
-        url, timeout=timeout, provider_name=provider_name
-    )
+    # Explicit configured URL wins over built-in providers.
+    if url:
+        return SimpleHttpReputationProvider(
+            url, timeout=timeout, provider_name=provider_name
+        )
+    api_key = ""
+    for name in ("ABUSEIPDB_KEY", "NODEBENCH_ABUSEIPDB_KEY"):
+        api_key = str(os.environ.get(name, "") or "").strip()
+        if api_key:
+            break
+    if api_key:
+        return AbuseIPDBProvider(api_key, timeout=timeout)
+    return NullProvider()
+
+
+class AbuseIPDBProvider(ReputationProvider):
+    """AbuseIPDB v2 check endpoint → composite 0-100 risk.
+
+    Primary signal is ``abuseConfidenceScore`` (0-100). The final risk also
+    folds in ``isTor``, ``usageType`` and report volume so a quiet-but-shady
+    datacenter IP is not scored identical to a whitelisted CDN edge.
+    """
+
+    name = "abuseipdb"
+    API_URL = "https://api.abuseipdb.com/api/v2/check"
+
+    def __init__(self, api_key: str, *, timeout: float = DEFAULT_TIMEOUT_S) -> None:
+        self.api_key = str(api_key or "").strip()
+        self.timeout = float(timeout)
+
+    def _failed(
+        self, item_id: str, exit_ip: str, error: ErrorInfo
+    ) -> ReputationObservation:
+        return ReputationObservation(
+            item_id=item_id,
+            exit_ip=exit_ip or "",
+            provider=self.name,
+            raw_score=None,
+            risk=None,
+            risk_level="unknown",
+            evidence="",
+            observed_at=_utc_now(),
+            status=Status.FAILED,
+            errors=[error],
+        )
+
+    @staticmethod
+    def composite_risk(payload: dict) -> tuple[float, float]:
+        """Return (raw_score, risk) on a 0-100 scale (higher = riskier).
+
+        ``abuseConfidenceScore`` is already 0-100. Extra signals adjust it:
+        - ``isTor`` forces at least 90
+        - hosting / datacenter usage adds a small penalty
+        - report volume adds a capped penalty even when confidence is 0
+        - explicit whitelist trims a little risk
+        """
+        confidence = payload.get("abuseConfidenceScore")
+        try:
+            risk = float(confidence) if confidence is not None else 0.0
+        except (TypeError, ValueError):
+            risk = 0.0
+        risk = max(0.0, min(100.0, risk))
+
+        if bool(payload.get("isTor")):
+            risk = max(risk, 90.0)
+
+        usage = str(payload.get("usageType") or "").lower()
+        if any(marker in usage for marker in ("data center", "hosting", "transit")):
+            risk = min(100.0, risk + 8.0)
+        elif any(marker in usage for marker in ("mobile", "fixed line", "isp")):
+            risk = max(0.0, risk - 3.0)
+
+        try:
+            reports = int(payload.get("totalReports") or 0)
+        except (TypeError, ValueError):
+            reports = 0
+        if reports > 0 and risk < 25.0:
+            risk = min(25.0, risk + min(15.0, reports * 0.5))
+
+        if payload.get("isWhitelisted") is True:
+            risk = max(0.0, risk - 5.0)
+
+        risk = max(0.0, min(100.0, risk))
+        raw = confidence if isinstance(confidence, (int, float)) else risk
+        return float(raw), risk
+
+    def lookup(self, item_id: str, exit_ip: str) -> ReputationObservation:
+        if not self.api_key:
+            return self._failed(
+                item_id,
+                exit_ip,
+                ErrorInfo(
+                    stage="inspect",
+                    code="reputation_key_missing",
+                    message_redacted="AbuseIPDB API key is not configured",
+                    retryable=False,
+                ),
+            )
+        if not exit_ip:
+            return self._failed(
+                item_id,
+                exit_ip,
+                ErrorInfo(
+                    stage="inspect",
+                    code="exit_ip_missing",
+                    message_redacted="exit ip is required for reputation lookup",
+                    retryable=False,
+                ),
+            )
+        query = "{0}?ipAddress={1}&maxAgeInDays=90".format(
+            self.API_URL, urllib.parse.quote(exit_ip, safe="")
+        )
+        request = urllib.request.Request(
+            query,
+            headers={
+                "Key": self.api_key,
+                "Accept": "application/json",
+                "User-Agent": "nodebench/0.1",
+            },
+            method="GET",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+                body = response.read(MAX_BODY_BYTES)
+        except (
+            urllib.error.URLError,
+            urllib.error.HTTPError,
+            TimeoutError,
+            OSError,
+        ) as err:
+            return self._failed(
+                item_id,
+                exit_ip,
+                ErrorInfo(
+                    stage="inspect",
+                    code="reputation_http_error",
+                    message_redacted=f"{type(err).__name__}: {err}",
+                    retryable=True,
+                ),
+            )
+        try:
+            payload = json.loads(body.decode("utf-8", errors="replace"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as err:
+            return self._failed(
+                item_id,
+                exit_ip,
+                ErrorInfo(
+                    stage="inspect",
+                    code="reputation_parse_error",
+                    message_redacted=f"invalid reputation JSON: {err}",
+                    retryable=False,
+                ),
+            )
+        data = payload.get("data") if isinstance(payload, dict) else None
+        if not isinstance(data, dict):
+            return self._failed(
+                item_id,
+                exit_ip,
+                ErrorInfo(
+                    stage="inspect",
+                    code="reputation_score_missing",
+                    message_redacted="AbuseIPDB payload has no data object",
+                    retryable=False,
+                ),
+            )
+        raw_score, risk = self.composite_risk(data)
+        evidence = {
+            "abuseConfidenceScore": data.get("abuseConfidenceScore"),
+            "usageType": data.get("usageType"),
+            "isTor": data.get("isTor"),
+            "isWhitelisted": data.get("isWhitelisted"),
+            "totalReports": data.get("totalReports"),
+            "isp": data.get("isp"),
+            "countryCode": data.get("countryCode"),
+        }
+        return ReputationObservation(
+            item_id=item_id,
+            exit_ip=exit_ip or "",
+            provider=self.name,
+            raw_score=raw_score,
+            risk=risk,
+            risk_level=risk_level_for(risk),
+            evidence=json.dumps(evidence, ensure_ascii=False, sort_keys=True)[:512],
+            observed_at=_utc_now(),
+            status=Status.OK,
+            errors=[],
+        )
 
 
 __all__ = [
+    "AbuseIPDBProvider",
     "DEFAULT_TIMEOUT_S",
     "SCORE_KEYS",
     "NullProvider",

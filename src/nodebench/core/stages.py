@@ -42,7 +42,7 @@ from nodebench.intelligence import IntelligenceService
 from nodebench.probes import project_root
 from nodebench.publishing import is_redistributable, publish_output
 from nodebench.publishing.upload import upload_published_files
-from nodebench.scoring import SCORING_VERSION, make_geo_lookup, score_run
+from nodebench.scoring import SCORING_VERSION, make_geo_lookup, make_risk_lookup, score_run
 
 STAGE_ORDER = ("inspect", "persist", "score", "export", "publish")
 EXPORT_DIR_NAME = "export"
@@ -209,6 +209,10 @@ def run_score_stage(
         base_url=str(config.intelligence.geo_url or ""),
         timeout=float(config.intelligence.timeout),
     )
+    risk_lookup = make_risk_lookup(
+        enabled=bool(config.intelligence.reputation_enabled),
+        timeout=float(config.intelligence.timeout),
+    )
     score_report = score_run(
         run_id=run_id,
         runner_id=str(report["runner_id"]),
@@ -221,6 +225,7 @@ def run_score_stage(
         scoring=config.scoring,
         history_days=int(config.history.days),
         geo_lookup=geo_lookup,
+        risk_lookup=risk_lookup,
     )
     write_json_atomic(scored_path(config, run_id), public_dump(score_report))
     summary = {
@@ -488,6 +493,10 @@ def score_artifacts(config: AppConfig, run_id: str) -> ScoreReport:
         base_url=str(config.intelligence.geo_url or ""),
         timeout=float(config.intelligence.timeout),
     )
+    risk_lookup = make_risk_lookup(
+        enabled=bool(config.intelligence.reputation_enabled),
+        timeout=float(config.intelligence.timeout),
+    )
     score_report = score_run(
         run_id=run_id,
         runner_id=str(config.runner_id),
@@ -500,6 +509,7 @@ def score_artifacts(config: AppConfig, run_id: str) -> ScoreReport:
         scoring=config.scoring,
         history_days=int(config.history.days),
         geo_lookup=geo_lookup,
+        risk_lookup=risk_lookup,
     )
     write_json_atomic(scored_path(config, run_id), public_dump(score_report))
     return score_report

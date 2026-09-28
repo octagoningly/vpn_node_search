@@ -885,7 +885,29 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _load_local_env() -> None:
+    """Load key=value pairs from .env in the project root (never committed)."""
+    root = _project_root()
+    path = root / ".env"
+    if not path.is_file():
+        return
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        name, _, value = line.partition("=")
+        name = name.strip()
+        value = value.strip().strip('"').strip("'")
+        if name and value and name not in os.environ:
+            os.environ[name] = value
+
+
 def run_cli(argv: Sequence[str] | None = None) -> int:
+    _load_local_env()
     parser = build_parser()
     try:
         args = parser.parse_args(list(argv) if argv is not None else None)
