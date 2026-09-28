@@ -429,8 +429,46 @@
     $("#wizard").hidden = true;
   });
 
+  // ── theme ──────────────────────────────────────
+  function applyTheme(t) {
+    document.documentElement.dataset.theme = t;
+    try { localStorage.setItem("nb-theme", t); } catch (_) {}
+  }
+  const savedTheme = (() => {
+    try { return localStorage.getItem("nb-theme"); } catch (_) { return null; }
+  })();
+  applyTheme(savedTheme || "light");
+  $("#themeToggle").addEventListener("click", () => {
+    const cur = document.documentElement.dataset.theme || "light";
+    applyTheme(cur === "dark" ? "light" : "dark");
+  });
+
+  // ── autostart / tray ───────────────────────────
+  $("#btnAutostart")?.addEventListener("click", async () => {
+    try {
+      const r = await api("/api/autostart", {
+        enable: $("#btnAutostart").textContent.trim() !== "开启",
+      });
+      $("#btnAutostart").textContent = r.enabled ? "关闭" : "开启";
+      toast(r.enabled ? "已加入开机自启" : "已取消开机自启");
+    } catch (e) {
+      toast("设置失败：" + e.message);
+    }
+  });
+
+  $("#btnTray")?.addEventListener("click", () => {
+    const el = $("#btnTray");
+    const on = el.textContent.trim() === "已开启";
+    el.textContent = on ? "已关闭" : "已开启";
+    toast(on ? "关闭窗口将直接退出" : "关闭窗口会最小化到托盘");
+  });
+
   // ── boot ───────────────────────────────────────
   loadKeys();
+  api("/api/autostart-status").then((r) => {
+    const el = $("#btnAutostart");
+    if (el) el.textContent = r.enabled ? "关闭" : "开启";
+  }).catch(() => {});
   api("/api/status")
     .then((s) => {
       if (!s.ready) openWizard();

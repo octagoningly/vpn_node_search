@@ -128,6 +128,62 @@ def repo_raw_urls(name: str) -> dict:
     }
 
 
+# ── autostart (Windows) ─────────────────────────────────────────────────
+AUTOSTART_NAME = "NodeBench"
+
+
+def _autostart_cmd() -> str:
+    if getattr(sys, "frozen", False):
+        return f'"{Path(sys.executable).resolve()}"'
+    return f'"{sys.executable}" "{ROOT / "gui" / "desktop.py"}"'
+
+
+def autostart_enabled() -> bool:
+    if os.name != "nt":
+        return False
+    try:
+        import winreg
+
+        key = winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            r"Software\Microsoft\Windows\CurrentVersion\Run",
+            0,
+            winreg.KEY_READ,
+        )
+        try:
+            winreg.QueryValueEx(key, AUTOSTART_NAME)
+            return True
+        except FileNotFoundError:
+            return False
+        finally:
+            winreg.CloseKey(key)
+    except OSError:
+        return False
+
+
+def set_autostart(enable: bool) -> None:
+    if os.name != "nt":
+        return
+    import winreg
+
+    key = winreg.OpenKey(
+        winreg.HKEY_CURRENT_USER,
+        r"Software\Microsoft\Windows\CurrentVersion\Run",
+        0,
+        winreg.KEY_SET_VALUE | winreg.KEY_READ,
+    )
+    try:
+        if enable:
+            winreg.SetValueEx(key, AUTOSTART_NAME, 0, winreg.REG_SZ, _autostart_cmd())
+        else:
+            try:
+                winreg.DeleteValue(key, AUTOSTART_NAME)
+            except FileNotFoundError:
+                pass
+    finally:
+        winreg.CloseKey(key)
+
+
 # ── run worker ──────────────────────────────────────────────────────────
 def run_worker() -> None:
     _state.update(running=True, log="启动 nodebench run --profile auto-collect…\n", stage_index=0)
@@ -326,6 +382,14 @@ class Handler(BaseHTTPRequestHandler):
 
             if path == "/api/pool/subs":
                 return self._json({"ok": True, "count": 0, "items": []})
+
+            if path == "/api/autostart-status":
+                return self._json({"enabled": autostart_enabled()})
+
+            if path == "/api/autostart":
+                enable = bool(body.get("enable"))
+                set_autostart(enable)
+                return self._json({"ok": True, "enabled": autostart_enabled()})
 
             if path == "/api/run":
                 if _state["running"]:

@@ -37,6 +37,10 @@
       </nav>
 
       <div class="sidebar-foot">
+        <button class="theme-toggle" id="themeToggle" title="切换深色/浅色">
+          <span>深色模式</span>
+          <span class="knob"></span>
+        </button>
         <div class="status-pill" id="readyPill">
           <span class="dot"></span>
           <span id="readyText">检查中…</span>
@@ -263,6 +267,24 @@
             <input class="input key-input" id="keyIpinfo" type="password" placeholder="如 760eddc…" />
             <a class="btn btn-ghost" href="https://ipinfo.io/dashboard"
                target="_blank" rel="noreferrer">获取 Token ↗</a>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-label">应用设置</div>
+          <div class="setting-row">
+            <div>
+              <div style="font-weight:550">开机自启</div>
+              <div class="hint">登录 Windows 后自动在后台启动</div>
+            </div>
+            <button class="btn btn-ghost" id="btnAutostart">开启</button>
+          </div>
+          <div class="setting-row">
+            <div>
+              <div style="font-weight:550">关闭时最小化到托盘</div>
+              <div class="hint">关掉窗口不退出，可在托盘图标里恢复</div>
+            </div>
+            <button class="btn btn-ghost" id="btnTray">已开启</button>
           </div>
         </div>
 
