@@ -22,13 +22,13 @@
   "files": [
     {
       "name": "cf-addapi.txt",
-      "sha256": "3f1c980fea84caaaaf5c310df16c6b5bccffd17e526f7e4a3552bfe304aef7e6",
-      "size_bytes": 1030,
+      "sha256": "4a17c4b0e64b2e966a254132576057528aebcd6c6424206c195271314f9309c7",
+      "size_bytes": 1060,
       "entry_count": 26
     },
     {
       "name": "cf-addcsv.csv",
-      "sha256": "cc87ff3f701b9d8e5171639893f9c891c5a5eb4735cbcb7100794f9c19481ced",
+      "sha256": "97b3b1c9f5f15f20c56b22ab5252a770be6d2a53d0d85bbd89b64e60cee5bb92",
       "size_bytes": 1154,
       "entry_count": 26
     },
