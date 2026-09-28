@@ -118,13 +118,43 @@ def gh_api(path: str, method: str = "GET", payload: dict | None = None) -> dict:
         raise RuntimeError(f"网络错误: {exc.reason}") from exc
 
 
-def repo_raw_urls(name: str) -> dict:
-    user = gh_api("/user")
-    login = user["login"]
+def repo_raw_urls(name: str, login: str | None = None) -> dict:
+    if not login:
+        user = gh_api("/user")
+        login = user["login"]
     base = f"https://raw.githubusercontent.com/{login}/{name}/public"
     return {
         "addapi": f"{base}/cf-addapi.txt",
         "addcsv": f"{base}/cf-addcsv.csv",
+    }
+
+
+def save_repo_state(login: str, repo: str) -> None:
+    """Persist login/repo so raw URLs can be assembled without another API call."""
+    ENV_PATH.parent.mkdir(parents=True, exist_ok=True)
+    env = load_env()
+    env["GITHUB_LOGIN"] = login
+    env["GITHUB_REPO"] = repo
+    lines = [
+        "# NodeBench local secrets — never commit",
+        f"GITHUB_TOKEN={env.get('GITHUB_TOKEN', '')}",
+        f"ABUSEIPDB_KEY={env.get('ABUSEIPDB_KEY', '')}",
+        f"IPINFO_TOKEN={env.get('IPINFO_TOKEN', '')}",
+        f"GITHUB_LOGIN={env.get('GITHUB_LOGIN', '')}",
+        f"GITHUB_REPO={env.get('GITHUB_REPO', '')}",
+    ]
+    ENV_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def current_publish_urls() -> dict:
+    env = load_env()
+    login = env.get("GITHUB_LOGIN", "").strip()
+    repo = env.get("GITHUB_REPO", "").strip()
+    if login and repo:
+        return repo_raw_urls(repo, login=login)
+    return {
+        "addapi": "https://raw.githubusercontent.com/<user>/<repo>/public/cf-addapi.txt",
+        "addcsv": "https://raw.githubusercontent.com/<user>/<repo>/public/cf-addcsv.csv",
     }
 
 
@@ -306,6 +336,7 @@ class Handler(BaseHTTPRequestHandler):
                 "ABUSEIPDB_KEY": env.get("ABUSEIPDB_KEY", ""),
                 "IPINFO_TOKEN": env.get("IPINFO_TOKEN", ""),
             }
+            urls = current_publish_urls()
             return self._json(
                 {
                     "ready": any(keys.values()),
@@ -313,7 +344,11 @@ class Handler(BaseHTTPRequestHandler):
                     "env": [
                         {"name": n, "ok": bool(v)} for n, v in keys.items()
                     ],
-                    "publish_url": "https://raw.githubusercontent.com/<user>/<repo>/public/cf-addapi.txt",
+                    "github_login": env.get("GITHUB_LOGIN", ""),
+                    "github_repo": env.get("GITHUB_REPO", ""),
+                    "publish_url": urls["addapi"],
+                    "publish_addapi": urls["addapi"],
+                    "publish_addcsv": urls["addcsv"],
                 }
             )
         if path == "/api/run/status":
@@ -326,6 +361,42 @@ class Handler(BaseHTTPRequestHandler):
         path = urllib.parse.urlparse(self.path).path
         body = self._read()
         try:
+            if path == "/api/github/whoami":
+                # Save token first (if provided), then resolve username.
+                token = (body.get("GITHUB_TOKEN") or "").strip()
+                if token:
+                    save_env({"GITHUB_TOKEN": token})
+                user = gh_api("/user")
+                login = user.get("login", "")
+                if login:
+                    save_repo_state(login, load_env().get("GITHUB_REPO", ""))
+                urls = current_publish_urls()
+                return self._json({"ok": True, "login": login, **urls})
+
+            if path == "/api/repo/create":
+                name = (body.get("name") or "cf-ip-pool").strip()
+                repo = gh_api(
+                    "/user/repos",
+                    "POST",
+                    {"name": name, "private": False, "auto_init": False},
+                )
+                login = load_env().get("GITHUB_LOGIN", "").strip()
+                if not login:
+                    user = gh_api("/user")
+                    login = user.get("login", "")
+                if login:
+                    save_repo_state(login, name)
+                urls = repo_raw_urls(name, login=login or None)
+                return self._json(
+                    {
+                        "ok": True,
+                        "url": repo.get("html_url", ""),
+                        "login": login,
+                        "name": name,
+                        **urls,
+                    }
+                )
+
             if path == "/api/keys":
                 save_env(
                     {

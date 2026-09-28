@@ -353,6 +353,7 @@ h1 {
   color: #fff;
 }
 .btn-primary:hover { background: #262626; border-color: #262626; }
+[data-theme="dark"] .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
 
 .btn-lg {
   padding: 12px 22px;
@@ -442,7 +443,7 @@ input[type="range"]::-webkit-slider-thumb {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--card);
   border: 2px solid var(--accent);
   box-shadow: 0 2px 8px rgba(0, 112, 243, 0.3);
   cursor: pointer;
@@ -538,8 +539,8 @@ input[type="range"]::-webkit-slider-thumb {
   font-family: var(--mono);
   font-size: 12px;
   line-height: 1.7;
-  background: #0f1115;
-  color: #c9d1d9;
+  background: var(--log-bg);
+  color: var(--log-text);
   border-radius: var(--radius-sm);
   padding: 16px;
   min-height: 160px;
@@ -674,7 +675,8 @@ input[type="range"]::-webkit-slider-thumb {
 .modal {
   position: fixed;
   inset: 0;
-  background: rgba(10, 10, 10, 0.4);
+  background: rgba(10, 10, 10, 0.45);
+[data-theme="dark"] .modal { background: rgba(0, 0, 0, 0.6); }
   backdrop-filter: blur(6px);
   display: flex;
   align-items: center;

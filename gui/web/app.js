@@ -321,18 +321,33 @@
   $("#btnOpenOutput").addEventListener("click", () => api("/api/open-output", {}, "POST"));
 
   // ── wizard ─────────────────────────────────────
+  // GitHub auth FIRST → username known → repo created → raw URL auto-filled.
   const WIZ = [
     {
       title: "欢迎使用 NodeBench",
       html: `
-        <p>三步搞定 CF 优选节点测评，并自动推送到你的 edgetunnel。</p>
-        <p style="margin-top:12px">本工具会先检测本机是否已有 <code>.env</code> 密钥，避免重复填写。</p>`,
+        <p>4 步搞定 CF 优选节点测评，并自动推送到你的 edgetunnel。</p>
+        <p style="margin-top:12px">会自动识别本机 <code>.env</code>，避免重复填写。</p>`,
       btn: "开始",
     },
     {
-      title: "1 · 创建 GitHub 仓库",
+      title: "1 · GitHub 认证",
       html: `
-        <p>一键创建公开仓库，用于托管优选地址文件（raw 链接给 edgetunnel 用）。</p>
+        <p>先连 GitHub —— 认证后自动拿到你的用户名，raw 链接就不用手填了。</p>
+        <a class="wiz-link" href="https://github.com/settings/tokens/new?scopes=public_repo&description=NodeBench" target="_blank">
+          创建 Token <small>只需 public_repo 权限 → 前往创建</small>
+        </a>
+        <input class="input" id="wizGithub" placeholder="粘贴 GitHub Token（ghp_ 或 github_pat_）" style="margin:8px 0" />
+        <div class="row">
+          <button class="btn btn-primary" id="wizAuth">认证并获取用户名</button>
+        </div>
+        <div id="wizAuthOut" class="repo-result"></div>`,
+      btn: "下一步",
+    },
+    {
+      title: "2 · 创建仓库",
+      html: `
+        <p>一键创建公开仓库，托管优选地址（名字可改）。</p>
         <div class="big-action">
           <div class="row">
             <input class="input" id="wizRepo" value="cf-ip-pool" style="max-width:220px" />
@@ -340,17 +355,13 @@
           </div>
           <div id="wizRepoOut" class="repo-result"></div>
         </div>
-        <p class="hint">仓库名可改。若已有仓库，直接下一步。</p>`,
+        <p class="hint">已有仓库？直接下一步，链接会按默认名拼好。</p>`,
       btn: "下一步",
     },
     {
-      title: "2 · 填入密钥",
+      title: "3 · 其它密钥",
       html: `
-        <p>点「前往」打开注册页，把密钥粘贴回来。只存本机。</p>
-        <a class="wiz-link" href="https://github.com/settings/tokens/new?scopes=public_repo&description=NodeBench" target="_blank">
-          GitHub Token <small>用于搜索候选 + 推送 public 分支 → 前往创建</small>
-        </a>
-        <input class="input" id="wizGithub" placeholder="粘贴 GitHub Token" style="margin:4px 0 10px" />
+        <p>纯净度 + 属地。可稍后再填。</p>
         <a class="wiz-link" href="https://www.abuseipdb.com/account/api/keys" target="_blank">
           AbuseIPDB Key <small>纯净度检测 → 前往获取</small>
         </a>
@@ -362,11 +373,12 @@
       btn: "保存并继续",
     },
     {
-      title: "3 · 对接 edgetunnel",
+      title: "4 · 对接 edgetunnel",
       html: `
-        <p>到管理页「优选订阅生成 → 自定义优选」，粘贴下面链接：</p>
-        <div class="code-block" id="wizUrl">https://raw.githubusercontent.com/&lt;你&gt;/&lt;仓库&gt;/public/cf-addapi.txt</div>
-        <p class="hint">以后每次运行完自动更新，管理页不用再改。</p>`,
+        <p>到管理页「优选订阅生成 → 自定义优选」，粘贴下面这条链接：</p>
+        <div class="code-block" id="wizUrl">https://raw.githubusercontent.com/&lt;user&gt;/&lt;repo&gt;/public/cf-addapi.txt</div>
+        <div class="code-block" id="wizUrlCsv" style="opacity:.7">https://raw.githubusercontent.com/&lt;user&gt;/&lt;repo&gt;/public/cf-addcsv.csv</div>
+        <p class="hint">链接已按你的用户名 / 仓库名自动填好。以后运行完自动更新，管理页不用再改。</p>`,
       btn: "完成",
     },
   ];
@@ -379,7 +391,30 @@
     $("#wizNext").textContent = w.btn;
     $("#wizBar").style.width = ((wizStep + 1) / WIZ.length) * 100 + "%";
     if (wizStep === 1) {
+      $("#wizAuth")?.addEventListener("click", onWizAuth);
+    }
+    if (wizStep === 2) {
       $("#wizCreateRepo").addEventListener("click", onWizRepo);
+    }
+    if (wizStep === 4) {
+      // fill URLs from last known state
+      api("/api/status").then((s) => {
+        if (s.publish_addapi) $("#wizUrl").textContent = s.publish_addapi;
+        if (s.publish_addcsv) $("#wizUrlCsv").textContent = s.publish_addcsv;
+      }).catch(() => {});
+    }
+  }
+
+  async function onWizAuth() {
+    const out = $("#wizAuthOut");
+    const token = $("#wizGithub").value.trim();
+    out.textContent = "认证中…";
+    try {
+      const r = await api("/api/github/whoami", { GITHUB_TOKEN: token });
+      out.textContent = `✓ 已登录：${r.login}\n${r.addapi}`;
+      toast("GitHub 认证成功");
+    } catch (e) {
+      out.textContent = e.message;
     }
   }
 
@@ -389,8 +424,7 @@
     out.textContent = "创建中…";
     try {
       const r = await api("/api/repo/create", { name });
-      out.textContent = `✓ ${r.addapi}`;
-      $("#wizUrl").textContent = r.addapi;
+      out.textContent = `✓ 仓库 ${r.login}/${r.name}\n${r.addapi}`;
     } catch (e) {
       out.textContent = e.message;
     }
@@ -404,10 +438,11 @@
   }
 
   $("#wizNext").addEventListener("click", async () => {
-    if (wizStep === 2) {
+    if (wizStep === 3) {
       try {
+        const token = $("#wizGithub")?.value.trim() || "";
         await api("/api/keys", {
-          GITHUB_TOKEN: $("#wizGithub")?.value.trim() || "",
+          GITHUB_TOKEN: token,
           ABUSEIPDB_KEY: $("#wizAbuse")?.value.trim() || "",
           IPINFO_TOKEN: $("#wizIpinfo")?.value.trim() || "",
         });
