@@ -887,6 +887,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 def _load_local_env() -> None:
     """Load key=value pairs from .env in the project root (never committed)."""
+    if "pytest" in sys.modules:
+        return
     root = _project_root()
     path = root / ".env"
     if not path.is_file():
