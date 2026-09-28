@@ -17,6 +17,10 @@ MIN_BASE64_LENGTH = 16
 BOM = "\ufeff"
 SCHEME_PATTERN = re.compile(r"(?im)^[ \t]*[a-z][a-z0-9+.\-]*://")
 BASE64_PATTERN = re.compile(r"^[A-Za-z0-9+/]+={0,2}$")
+# ADDAPI-style endpoint line: HOST[:PORT][#remark]  (IPv6 in brackets)
+ENDPOINT_LINE_PATTERN = re.compile(
+    r"^(?:\[[0-9A-Fa-f:.]+\]|[A-Za-z0-9._-]+)(?::\d{1,5})?(?:#.*)?$"
+)
 YAML_SUFFIXES = frozenset({".yaml", ".yml"})
 BASE64_SUFFIXES = frozenset({".b64", ".base64"})
 
@@ -81,6 +85,16 @@ def detect_content_type(text: str) -> str:
         return "uri_list"
     if looks_like_base64(stripped):
         return "base64_sub"
+    lines = [ln.strip() for ln in stripped.splitlines() if ln.strip() and not ln.strip().startswith("#")]
+    if not lines:
+        return "text"
+    first = lines[0]
+    # iptest-style CSV header (subscription URL may lack .csv suffix)
+    first_cells = [c.strip().lower().replace(" ", "") for c in first.split(",")]
+    if any(cell in {"ip地址", "ipaddress", "ip"} for cell in first_cells) and len(first_cells) >= 2:
+        return "csv"
+    if lines and all(ENDPOINT_LINE_PATTERN.match(ln) for ln in lines[:20]):
+        return "endpoint_list"
     return "text"
 
 

@@ -1,0 +1,72 @@
+# 自动搜集：订阅源拉取公开优选列表 + GitHub 发现候选文件，再 CF 探测并发布
+profile: auto-collect
+runner_id: local:desktop-a
+sources:
+  local:
+    enabled: false
+  subscriptions:
+    enabled: true
+    urls:
+      # WorkerVless2sub 公开优选地址（ADDAPI）
+      - https://raw.githubusercontent.com/cmliu/WorkerVless2sub/main/addressesapi.txt
+      # iptest 风格 CSV
+      - https://raw.githubusercontent.com/cmliu/WorkerVless2sub/main/addressescsv.csv
+      - https://raw.githubusercontent.com/cmliu/WorkerVless2sub/main/addressesipv6api.txt
+    timeout_s: 20
+    license_tag: "MIT"
+    offline: false
+  github:
+    enabled: true
+    allowed_repositories:
+      - cmliu/WorkerVless2sub
+      - cmliu/edgetunnel
+      - XIU2/CloudflareSpeedTest
+      - 735754647/Free-Nodes
+    queries:
+      - 'filename:addressesapi.txt'
+      - 'filename:addressescsv.csv'
+      - 'filename:cf-addapi.txt'
+      - '"IP地址" filename:addressescsv.csv'
+    max_files_per_run: 20
+    cache_ttl_hours: 24
+    offline: false
+  cf:
+    enabled: true
+    candidate_files:
+      - candidates/cf-user-20260928.txt
+    max_ips_per_run: 150
+  candidate_import:
+    enabled: false
+probe:
+  proxy:
+    enabled: false
+  cf:
+    enabled: true
+    cfst_path: tools/cfst/CloudflareSpeedTest.exe
+    target_host: octagoningly-vpn.pages.dev
+    speedtest_url: https://speed.cloudflare.com/__down?bytes=5000000
+    max_nodes: 400
+    max_download_nodes: 50
+    total_deadline_s: 300
+    allowed_ports:
+      - 443
+      - 8443
+      - 2087
+      - 2053
+      - 80
+      - 8080
+      - 8880
+      - 2052
+      - 2082
+      - 2083
+      - 2086
+      - 2095
+      - 2096
+publish:
+  enabled: true
+  allow_proxy_credentials: false
+  cf_candidates_authorized: true
+  upload:
+    enabled: true
+    backend: folder
+    folder_path: output/publish-staging

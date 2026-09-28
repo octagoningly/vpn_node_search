@@ -152,6 +152,8 @@ class CfProbeConfig(BaseModel):
     enabled: bool = False
     concurrency: int = 20
     max_download_nodes: int = 20
+    # Bulk latency scan is cheap; download is what max_download_nodes limits.
+    max_nodes: int = 2000
     target_host: str = ""
     speedtest_url: str = ""
     cfst_path: str = ""

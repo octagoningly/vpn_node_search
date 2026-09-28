@@ -229,7 +229,7 @@ def cf_budget(config: AppConfig) -> ProbeBudget:
         )
     return ProbeBudget(
         concurrency=max(1, int(probe.concurrency)),
-        max_nodes=max(1, int(probe.max_download_nodes)),
+        max_nodes=max(1, int(probe.max_nodes)),
         max_download_mb_each=DEFAULT_DOWNLOAD_MB,
         max_download_nodes=max(1, int(probe.max_download_nodes)),
         total_bytes_limit=total_bytes,

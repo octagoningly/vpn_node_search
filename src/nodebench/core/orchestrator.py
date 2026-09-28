@@ -334,6 +334,16 @@ def _run_cf_probe(
         run_dir=_output_base(config) / ctx.run_id,
     )
     targets = [endpoint_target(edge) for edge in edges]
+    # Probe multi-source / common-port endpoints first so a tight budget
+    # still covers the most corroborated candidates.
+    preferred_ports = set(probe_config.allowed_ports or [])
+    def _edge_priority(edge: Any) -> tuple[int, int, str]:
+        sources = len(getattr(edge, "source_ids", None) or ())
+        port = int(getattr(edge, "port", 0) or 0)
+        port_rank = 0 if port in (443, 8443) else (1 if port in preferred_ports else 2)
+        return (-sources, port_rank, str(getattr(edge, "address", "")))
+    edges_sorted = sorted(edges, key=_edge_priority)
+    targets = [endpoint_target(edge) for edge in edges_sorted]
     try:
         results = run_cf_batch(targets, prober, budget)
     except Exception as err:
