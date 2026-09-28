@@ -1,4 +1,4 @@
-# One-click: measure locally, then push public files so edgetunnel auto-picks up.
+﻿# One-click: measure locally, then push public files so edgetunnel auto-picks up.
 # Usage:  powershell -ExecutionPolicy Bypass -File scripts/publish.ps1
 # Env:    NODEBENCH_PROFILE  (default auto-collect)
 
@@ -34,12 +34,12 @@ if (-not $git) {
 Push-Location $root
 try {
     Write-Output "==> 1/2 run nodebench --profile $profileName (local speed test)"
-    Write-Output "    请稍候：联网搜集候选 + 实测约 3-10 分钟，期间无输出属正常..."
+    Write-Output "    please wait: collect candidates + probe ~3-10 min, no output is normal"
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
     & uv run nodebench run --profile $profileName
     $code = $LASTEXITCODE
     $sw.Stop()
-    Write-Output ("    测速耗时 {0:N1} 分钟，exit={1}" -f $sw.Elapsed.TotalMinutes, $code)
+    Write-Output ("    took {0:N1} min, exit={1}" -f $sw.Elapsed.TotalMinutes, $code)
 
     $staging = Join-Path $root "output\publish-staging"
     if (-not (Test-Path -LiteralPath $staging)) {
