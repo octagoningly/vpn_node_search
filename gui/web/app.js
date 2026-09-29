@@ -354,20 +354,23 @@
       btn: "下一步",
     },
     {
-      title: "2 · 创建仓库",
+      title: "2 · 选择 / 创建仓库",
       html: `
-        <p>一键创建公开仓库，托管优选地址（名字可改）。</p>
-        <div class="big-action">
-          <div class="row">
-            <input class="input" id="wizRepo" value="cf-ip-pool" style="max-width:220px" />
-            <button class="btn btn-primary" id="wizCreateRepo">一键创建仓库</button>
-          </div>
-          <div id="wizRepoOut" class="repo-result"></div>
+        <p>选择<strong>已有仓库</strong>，或一键<strong>新建</strong>一个，用来托管优选地址。</p>
+
+        <div class="card" style="margin:12px 0;padding:14px">
+          <div class="card-label">已有仓库</div>
+          <div id="wizRepoList" class="repo-list">加载中…</div>
         </div>
+
         <div class="howto">
-          <div class="howto-step">软件会自动：创建仓库 → 拼好 raw 链接，你不用做别的</div>
-          <div class="howto-step">已有仓库？直接点下一步，链接会按默认名 <code>cf-ip-pool</code> 拼好</div>
-        </div>`,
+          <div class="howto-step">或新建一个：</div>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <input class="input" id="wizRepo" value="cf-ip-pool" style="max-width:220px" />
+          <button class="btn btn-primary" id="wizCreateRepo">一键创建仓库</button>
+        </div>
+        <div id="wizRepoOut" class="repo-result"></div>`,
       btn: "下一步",
     },
     {
@@ -459,6 +462,7 @@
           out.textContent = "⚠ 尚未登录 GitHub — 请返回上一步完成认证";
         }
       }).catch(() => {});
+      loadRepoList();
     }
     if (wizStep === 4) {
       api("/api/status").then((s) => {
@@ -488,6 +492,46 @@
     } catch (e) {
       out.textContent = "✗ " + e.message;
       return null;
+    }
+  }
+
+  async function loadRepoList() {
+    const box = $("#wizRepoList");
+    if (!box) return;
+    box.innerHTML = "加载中…";
+    try {
+      const r = await api("/api/github/repos", {});
+      const items = (r.items || []).slice(0, 30);
+      if (!items.length) {
+        box.innerHTML = '<div class="hint">没有找到公开仓库，用下面的输入框新建一个吧</div>';
+        return;
+      }
+      box.innerHTML = items
+        .map(
+          (it) => `
+          <button class="repo-item" data-name="${it.name}">
+            <span class="repo-name">${it.name}</span>
+            <span class="repo-meta">${it.private ? "私有" : "公开"} · ${it.updated_at.slice(0, 10)}</span>
+          </button>`
+        )
+        .join("");
+      box.querySelectorAll(".repo-item").forEach((btn) => {
+        btn.addEventListener("click", () => selectRepo(btn.dataset.name));
+      });
+    } catch (e) {
+      box.innerHTML = `<div class="hint">加载失败：${e.message}</div>`;
+    }
+  }
+
+  async function selectRepo(name) {
+    const out = $("#wizRepoOut");
+    if (out) out.textContent = "保存中…";
+    try {
+      const r = await api("/api/repo/select", { name });
+      if (out) out.textContent = `✓ 已选择：${r.login}/${r.name}\n${r.addapi}`;
+      toast(`已选择仓库 ${name}`);
+    } catch (e) {
+      if (out) out.textContent = e.message;
     }
   }
 

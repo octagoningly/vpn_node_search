@@ -360,6 +360,38 @@ class Handler(BaseHTTPRequestHandler):
                 urls = current_publish_urls()
                 return self._json({"ok": True, "login": login, **urls})
 
+            if path == "/api/github/repos":
+                # List the authenticated user's public repos (for picker).
+                repos = gh_api("/user/repos?per_page=100&sort=updated")
+                items = [
+                    {
+                        "name": r.get("name", ""),
+                        "full_name": r.get("full_name", ""),
+                        "private": bool(r.get("private")),
+                        "updated_at": r.get("updated_at", ""),
+                        "html_url": r.get("html_url", ""),
+                    }
+                    for r in repos
+                    if isinstance(r, dict)
+                ]
+                return self._json({"ok": True, "items": items})
+
+            if path == "/api/repo/select":
+                # Use an existing repo — just record it, no create call.
+                name = (body.get("name") or "").strip()
+                if not name:
+                    raise RuntimeError("请提供仓库名")
+                login = load_env().get("GITHUB_LOGIN", "").strip()
+                if not login:
+                    user = gh_api("/user")
+                    login = user.get("login", "")
+                if login:
+                    save_repo_state(login, name)
+                urls = repo_raw_urls(name, login=login or None)
+                return self._json(
+                    {"ok": True, "login": login, "name": name, **urls}
+                )
+
             if path == "/api/repo/create":
                 name = (body.get("name") or "cf-ip-pool").strip()
                 repo = gh_api(
@@ -393,18 +425,6 @@ class Handler(BaseHTTPRequestHandler):
                     }
                 )
                 return self._json({"ok": True})
-
-            if path == "/api/repo/create":
-                name = (body.get("name") or "cf-ip-pool").strip()
-                repo = gh_api(
-                    "/user/repos",
-                    "POST",
-                    {"name": name, "private": False, "auto_init": False},
-                )
-                urls = repo_raw_urls(name)
-                return self._json(
-                    {"ok": True, "url": repo.get("html_url", ""), **urls}
-                )
 
             if path == "/api/settings":
                 data = load_config()

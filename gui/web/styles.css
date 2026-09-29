@@ -831,3 +831,37 @@ input[type="range"]::-webkit-slider-thumb {
 
 /* file button */
 .file-btn { position: relative; overflow: hidden; }
+
+/* repo picker */
+.repo-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.repo-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: left;
+}
+
+.repo-item:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.repo-name { font-weight: 550; }
+.repo-meta { color: var(--faint); font-size: 11.5px; }
