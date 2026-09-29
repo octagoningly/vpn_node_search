@@ -684,6 +684,12 @@ class Handler(BaseHTTPRequestHandler):
                 "IPINFO_TOKEN": env.get("IPINFO_TOKEN", ""),
             }
             urls = current_publish_urls()
+            cfg = load_config()
+            probe_cfg = cfg.get("probe") or {}
+            cf_cfg = probe_cfg.get("cf") or {}
+            bypass = cf_cfg.get("bypass_system_proxy")
+            if bypass is None:
+                bypass = True
             return self._json(
                 {
                     "ready": any(keys.values()),
@@ -696,6 +702,7 @@ class Handler(BaseHTTPRequestHandler):
                     "publish_url": urls["addapi"],
                     "publish_addapi": urls["addapi"],
                     "publish_addcsv": urls["addcsv"],
+                    "bypass_system_proxy": bool(bypass),
                 }
             )
         if path == "/api/run/status":
@@ -795,6 +802,13 @@ class Handler(BaseHTTPRequestHandler):
                     scoring.setdefault("filters", {}).update(body["filters"])
                 if "addapi_remark_template" in body:
                     data["addapi_remark_template"] = body["addapi_remark_template"]
+                if "bypass_system_proxy" in body:
+                    on = bool(body["bypass_system_proxy"])
+                    probe = data.setdefault("probe", {})
+                    cf = probe.setdefault("cf", {})
+                    cf["bypass_system_proxy"] = on
+                    proxy = probe.setdefault("proxy", {})
+                    proxy["bypass_system_proxy"] = on
                 save_config(data)
                 return self._json({"ok": True})
 

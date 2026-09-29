@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ipaddress
+import os
 import socket
 import ssl
 import subprocess
@@ -445,7 +446,32 @@ def _option_value(command: Sequence[str], flag: str) -> str:
     return ""
 
 
-def default_cfst_runner(command: Sequence[str], timeout: float) -> str:
+_PROXY_ENV_KEYS = (
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "ALL_PROXY",
+    "http_proxy",
+    "https_proxy",
+    "all_proxy",
+)
+
+
+def build_probe_env(bypass_system_proxy: bool = True) -> dict[str, str]:
+    """Environment for CFST: default strips local proxy so speeds stay real."""
+    env = os.environ.copy()
+    if bypass_system_proxy:
+        for key in _PROXY_ENV_KEYS:
+            env.pop(key, None)
+        env["NO_PROXY"] = "*"
+        env["no_proxy"] = "*"
+    return env
+
+
+def default_cfst_runner(
+    command: Sequence[str],
+    timeout: float,
+    env: Mapping[str, str] | None = None,
+) -> str:
     """Run CloudflareSpeedTest and return the result table it wrote.
 
     A non-zero exit or timeout must not throw away a result file CFST
@@ -461,6 +487,7 @@ def default_cfst_runner(command: Sequence[str], timeout: float) -> str:
             return path.read_text(encoding="utf-8", errors="replace")
         return ""
 
+    run_env = dict(env) if env is not None else build_probe_env(True)
     try:
         completed = subprocess.run(
             list(command),
@@ -470,6 +497,7 @@ def default_cfst_runner(command: Sequence[str], timeout: float) -> str:
             errors="replace",
             stdin=subprocess.DEVNULL,
             timeout=max(1.0, float(timeout)),
+            env=run_env,
         )
     except subprocess.TimeoutExpired as err:
         # CFST writes the table as it goes; keep whatever landed on disk.
@@ -528,6 +556,23 @@ class CfstProber:
         self.root = root
         self.binary = binary
         self.runner = runner
+        if runner is default_cfst_runner:
+            # Default runner: honour bypass_system_proxy (default on) so
+            # Clash/TUN cannot reroute the download being measured.
+            probe_env = build_probe_env(
+                bool(getattr(config.probe.cf, "bypass_system_proxy", True))
+            )
+            _base = runner
+
+            def _bound_runner(
+                cmd: Sequence[str],
+                timeout: float,
+                _env: Mapping[str, str] = probe_env,
+                _fn=_base,
+            ) -> str:
+                return _fn(cmd, timeout, env=_env)
+
+            self.runner = _bound_runner
         self.check_factory = check
         self.logger = logger
         self._metrics: dict[tuple[str, int], CsvRow] = {}

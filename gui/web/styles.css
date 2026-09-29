@@ -413,6 +413,24 @@ h1 {
   font-weight: 500;
 }
 
+.switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+}
+
+.switch-title {
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--text);
+}
+
+.switch-row .hint {
+  margin-top: 2px;
+}
+
 /* ── Slider ──────────────────────────────────────── */
 .slider-row { margin-bottom: 16px; }
 

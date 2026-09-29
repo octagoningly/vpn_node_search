@@ -56,6 +56,7 @@ probe:
     max_nodes: 2500
     max_download_nodes: 80
     total_deadline_s: 420
+    bypass_system_proxy: true
     allowed_ports:
       - 443
       - 8443

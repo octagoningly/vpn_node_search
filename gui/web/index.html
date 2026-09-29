@@ -195,6 +195,15 @@
               <input class="input" id="maxRisk" type="number" value="50" />
             </label>
 
+            <div class="card-label" style="margin-top:20px">测速环境</div>
+            <div class="switch-row">
+              <div>
+                <div class="switch-title">绕过本地代理</div>
+                <div class="hint">测速时忽略 Clash / 系统代理，测到节点真实速度</div>
+              </div>
+              <button class="btn btn-ghost" id="btnBypassProxy">已开启</button>
+            </div>
+
             <div class="card-label" style="margin-top:20px">国家 / 地区</div>
             <div class="chip-select" id="countryChips">
               <button class="chip-toggle active" data-v="">全部</button>

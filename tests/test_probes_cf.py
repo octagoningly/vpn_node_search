@@ -28,6 +28,7 @@ from nodebench.probes.cfst import (
     CHECK_OK,
     CHECK_TIMEOUT,
     EndpointCheck,
+    build_probe_env,
     default_cfst_runner,
     family_mismatch,
     normalize_ip,
@@ -46,6 +47,23 @@ CSV_TEXT = (
     "192.0.2.1,4,4,0.0,23.5,28.64,HKG\n"
     "198.51.100.2,4,4,0.0,45.1,,\n"
 )
+
+
+def test_build_probe_env_strips_local_proxy_by_default(monkeypatch):
+    monkeypatch.setenv("HTTPS_PROXY", "http://127.0.0.1:7890")
+    monkeypatch.setenv("HTTP_PROXY", "http://127.0.0.1:7890")
+    monkeypatch.setenv("MY_KEEP", "yes")
+    env = build_probe_env(True)
+    assert "HTTPS_PROXY" not in env
+    assert "HTTP_PROXY" not in env
+    assert env.get("NO_PROXY") == "*"
+    assert env.get("MY_KEEP") == "yes"
+
+
+def test_build_probe_env_can_keep_proxy(monkeypatch):
+    monkeypatch.setenv("HTTPS_PROXY", "http://127.0.0.1:7890")
+    env = build_probe_env(False)
+    assert env.get("HTTPS_PROXY") == "http://127.0.0.1:7890"
 
 
 def sample_target(**overrides) -> EndpointTarget:

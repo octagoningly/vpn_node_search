@@ -293,12 +293,32 @@
           allowed_countries: countries,
         },
         addapi_remark_template: $("#remarkTpl").value.trim(),
+        bypass_system_proxy: $("#btnBypassProxy")?.textContent.trim() === "已开启",
       });
       toast("设置已保存");
     } catch (e) {
       toast("保存失败：" + e.message);
     }
   });
+
+  $("#btnBypassProxy")?.addEventListener("click", async () => {
+    const el = $("#btnBypassProxy");
+    const on = el.textContent.trim() !== "已开启";
+    el.textContent = on ? "已开启" : "已关闭";
+    try {
+      await api("/api/settings", { bypass_system_proxy: on });
+      toast(on ? "测速将绕过本地代理" : "测速将跟随系统代理");
+    } catch (e) {
+      toast("保存失败：" + e.message);
+    }
+  });
+
+  api("/api/status").then((s) => {
+    const el = $("#btnBypassProxy");
+    if (el && typeof s.bypass_system_proxy === "boolean") {
+      el.textContent = s.bypass_system_proxy ? "已开启" : "已关闭";
+    }
+  }).catch(() => {});
 
   // ── result ─────────────────────────────────────
   async function loadResult() {

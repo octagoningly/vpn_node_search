@@ -42,6 +42,8 @@ probe:
     api_timeout_s: 10
     per_node_timeout_s: 20
     total_deadline_s: 300
+    # 测速默认绕过本地代理（Clash/TUN），避免测到代理出口速度
+    bypass_system_proxy: true
   cf:
     enabled: false
     concurrency: 20
@@ -56,6 +58,7 @@ probe:
     allowed_ports:
       - 443
     ip_family: "4"
+    bypass_system_proxy: true
 intelligence:
   reputation_enabled: true
   echo_url: ""

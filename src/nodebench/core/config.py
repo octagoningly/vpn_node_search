@@ -138,6 +138,7 @@ class ProxyProbeConfig(BaseModel):
     api_timeout_s: float = 10
     per_node_timeout_s: float = 20
     total_deadline_s: float = 300
+    bypass_system_proxy: bool = True
 
     @field_validator("api_timeout_s", "per_node_timeout_s", "total_deadline_s")
     @classmethod
@@ -164,6 +165,9 @@ class CfProbeConfig(BaseModel):
     total_deadline_s: float = 600
     allowed_ports: list[int] = Field(default_factory=lambda: [443])
     ip_family: str = "4"
+    # Measure the candidate path directly — local Clash/TUN proxy would
+    # reroute CFST downloads and fake the speed. Default bypass.
+    bypass_system_proxy: bool = True
 
     @field_validator("tcp_timeout_s", "tls_timeout_s", "http_timeout_s", "total_deadline_s")
     @classmethod
