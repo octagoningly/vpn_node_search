@@ -398,10 +398,28 @@
     {
       title: "4 · 对接 edgetunnel",
       html: `
-        <p>到管理页「优选订阅生成 → 自定义优选」，粘贴下面这条链接：</p>
-        <div class="code-block" id="wizUrl">https://raw.githubusercontent.com/&lt;user&gt;/&lt;repo&gt;/public/cf-addapi.txt</div>
-        <div class="code-block" id="wizUrlCsv" style="opacity:.7">https://raw.githubusercontent.com/&lt;user&gt;/&lt;repo&gt;/public/cf-addcsv.csv</div>
-        <p class="hint">链接已按你的用户名 / 仓库名自动填好。以后运行完自动更新，管理页不用再改。</p>`,
+        <p>到管理页「优选订阅生成 → 自定义优选」，粘贴<strong>下面这一条</strong>链接：</p>
+
+        <div class="code-block" id="wizUrl" style="font-weight:600;color:var(--accent)">
+          https://raw.githubusercontent.com/&lt;user&gt;/&lt;repo&gt;/public/cf-addapi.txt
+        </div>
+        <button class="btn btn-primary" id="wizCopy" style="margin:8px 0 4px">复制链接</button>
+
+        <div class="howto" style="margin-top:14px">
+          <div class="howto-step">① 打开 edgetunnel 管理页 →「优选订阅生成」</div>
+          <div class="howto-step">② 「自定义优选」文本框里<strong>粘贴上面这条链接</strong></div>
+          <div class="howto-step">③ 点「保存」→「开始优选」</div>
+          <div class="howto-step">以后本工具运行完会自动更新，<strong>这个框不用再改</strong></div>
+        </div>
+
+        <details style="margin-top:14px">
+          <summary style="cursor:pointer;color:var(--muted);font-size:12.5px">
+            可选：ADDCSV 链接（如果你的部署有 ADDCSV 变量）
+          </summary>
+          <div class="code-block" id="wizUrlCsv" style="margin-top:8px;opacity:.75">
+            https://raw.githubusercontent.com/&lt;user&gt;/&lt;repo&gt;/public/cf-addcsv.csv
+          </div>
+        </details>`,
       btn: "完成",
     },
   ];
@@ -447,6 +465,10 @@
         if (s.publish_addapi) $("#wizUrl").textContent = s.publish_addapi;
         if (s.publish_addcsv) $("#wizUrlCsv").textContent = s.publish_addcsv;
       }).catch(() => {});
+      $("#wizCopy")?.addEventListener("click", () => {
+        const text = $("#wizUrl").textContent.trim();
+        navigator.clipboard.writeText(text).then(() => toast("已复制链接"));
+      });
     }
   }
 
