@@ -33,6 +33,7 @@ if getattr(sys, "frozen", False):
 ENV_PATH = ROOT / ".env"
 CONFIG_PATH = ROOT / "config" / "default.yaml"
 POOL_PATH = ROOT / "candidates" / "user-import.txt"
+THEME_PATH = ROOT / "ui-theme.txt"
 PORT = 8765
 _bound: dict = {"port": None, "error": ""}
 
@@ -84,6 +85,24 @@ def save_env(values: dict[str, str]) -> None:
         if key not in order and not key.startswith("#"):
             lines.append(f"{key}={val}")
     ENV_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def load_theme() -> str:
+    """Theme must outlive WebView2 localStorage — keep it on disk."""
+    try:
+        if THEME_PATH.is_file():
+            value = THEME_PATH.read_text(encoding="utf-8").strip().lower()
+            if value in {"dark", "light"}:
+                return value
+    except OSError:
+        pass
+    return "light"
+
+
+def save_theme(value: str) -> str:
+    theme = "dark" if str(value).strip().lower() == "dark" else "light"
+    THEME_PATH.write_text(theme + "\n", encoding="utf-8")
+    return theme
 
 
 def load_config() -> dict:
@@ -727,6 +746,7 @@ class Handler(BaseHTTPRequestHandler):
                     "publish_addapi": urls["addapi"],
                     "publish_addcsv": urls["addcsv"],
                     "bypass_system_proxy": bool(bypass),
+                    "theme": load_theme(),
                 }
             )
         if path == "/api/run/status":
@@ -735,6 +755,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(load_results())
         if path == "/api/scheduler/status":
             return self._json(run_scheduler_cli("status"))
+        if path == "/api/theme":
+            return self._json({"theme": load_theme()})
         self._json({"error": "not found"}, 404)
 
     def do_POST(self) -> None:
@@ -874,6 +896,10 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json({"ok": False, "error": "已在运行"}, 409)
                 threading.Thread(target=run_worker, daemon=True).start()
                 return self._json({"ok": True})
+
+            if path == "/api/theme":
+                theme = save_theme(str(body.get("theme") or "light"))
+                return self._json({"ok": True, "theme": theme})
 
             if path == "/api/scheduler/install":
                 time_value = str(body.get("time") or "03:00").strip() or "03:00"

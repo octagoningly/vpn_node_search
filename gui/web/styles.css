@@ -1,6 +1,7 @@
 /* NodeBench — modern minimal UI (Geist / Linear inspired) */
 
 :root {
+  color-scheme: light;
   --bg: #fafafa;
   --card: #ffffff;
   --text: #0a0a0a;
@@ -29,6 +30,7 @@
 
 /* ── Dark theme ─────────────────────────────────── */
 [data-theme="dark"] {
+  color-scheme: dark;
   --bg: #0b0c0e;
   --card: #14161a;
   --text: #f2f3f5;
@@ -743,7 +745,6 @@ input[type="range"]::-webkit-slider-thumb {
   position: fixed;
   inset: 0;
   background: rgba(10, 10, 10, 0.45);
-[data-theme="dark"] .modal { background: rgba(0, 0, 0, 0.6); }
   backdrop-filter: blur(6px);
   display: flex;
   align-items: center;
@@ -752,16 +753,57 @@ input[type="range"]::-webkit-slider-thumb {
   padding: 20px;
 }
 
+[data-theme="dark"] .modal {
+  background: rgba(0, 0, 0, 0.65);
+}
+
 .modal[hidden] { display: none; }
 
 .modal-card {
   width: 520px;
   max-width: 100%;
   background: var(--card);
+  color: var(--text);
+  border: 1px solid var(--border);
   border-radius: 18px;
   padding: 28px;
   box-shadow: var(--shadow-lg);
   animation: pop 0.22s ease;
+}
+
+[data-theme="dark"] .modal-card {
+  background: #16181c;
+  border-color: var(--border);
+  color: var(--text);
+}
+
+[data-theme="dark"] .modal-card h2,
+[data-theme="dark"] #wizBody,
+[data-theme="dark"] .modal-card p,
+[data-theme="dark"] .modal-card label,
+[data-theme="dark"] .modal-card .hint,
+[data-theme="dark"] .modal-card .card-label {
+  color: var(--text);
+}
+
+[data-theme="dark"] #wizBody {
+  color: var(--muted);
+}
+
+[data-theme="dark"] .modal-card .input,
+[data-theme="dark"] .modal-card input,
+[data-theme="dark"] .modal-card select,
+[data-theme="dark"] .modal-card textarea {
+  background: var(--bg);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+[data-theme="dark"] .modal-card .card,
+[data-theme="dark"] .modal-card .howto {
+  background: var(--bg);
+  border-color: var(--border);
+  color: var(--text);
 }
 
 @keyframes pop {
@@ -885,13 +927,19 @@ input[type="range"]::-webkit-slider-thumb {
   bottom: 24px;
   right: 24px;
   background: var(--text);
-  color: #fff;
+  color: var(--bg);
   padding: 12px 18px;
   border-radius: 12px;
   font-size: 13.5px;
   box-shadow: var(--shadow-lg);
   z-index: 100;
   animation: fade 0.2s ease;
+}
+
+[data-theme="dark"] .toast {
+  background: #2a2e34;
+  color: var(--text);
+  border: 1px solid var(--border-strong);
 }
 
 .toast[hidden] { display: none; }

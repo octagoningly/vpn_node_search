@@ -733,17 +733,28 @@
 
   // ── theme ──────────────────────────────────────
   function applyTheme(t) {
-    document.documentElement.dataset.theme = t;
-    try { localStorage.setItem("nb-theme", t); } catch (_) {}
+    const theme = t === "dark" ? "dark" : "light";
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.style.colorScheme = theme;
+    try { localStorage.setItem("nb-theme", theme); } catch (_) {}
+    return theme;
   }
-  const savedTheme = (() => {
-    try { return localStorage.getItem("nb-theme"); } catch (_) { return null; }
-  })();
-  applyTheme(savedTheme || "light");
+  function loadTheme() {
+    // localStorage is flaky in WebView2 — disk-backed API wins.
+    api("/api/theme")
+      .then((r) => applyTheme(r.theme || "light"))
+      .catch(() => {
+        let saved = null;
+        try { saved = localStorage.getItem("nb-theme"); } catch (_) {}
+        applyTheme(saved || "light");
+      });
+  }
   $("#themeToggle").addEventListener("click", () => {
     const cur = document.documentElement.dataset.theme || "light";
-    applyTheme(cur === "dark" ? "light" : "dark");
+    const next = applyTheme(cur === "dark" ? "light" : "dark");
+    api("/api/theme", { theme: next }).catch(() => {});
   });
+  loadTheme();
 
   // ── autostart / tray ───────────────────────────
   $("#btnAutostart")?.addEventListener("click", async () => {
