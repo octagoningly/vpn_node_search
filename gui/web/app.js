@@ -39,8 +39,22 @@
       const el = $("#page-" + page);
       if (el) el.classList.add("active");
       if (page === "result") loadResult();
-      if (page === "keys") loadKeys();
+      if (page === "keys") {
+        loadKeys();
+        showTab("tab-keys");
+      }
     });
+  });
+
+  // ── settings tabs ──────────────────────────────
+  function showTab(id) {
+    $$("#settingsTabs .tab").forEach((t) => {
+      t.classList.toggle("active", t.dataset.tab === id);
+    });
+    $$(".tab-panel").forEach((p) => p.classList.toggle("active", p.id === id));
+  }
+  $$("#settingsTabs .tab").forEach((t) => {
+    t.addEventListener("click", () => showTab(t.dataset.tab));
   });
 
   // ── sliders ────────────────────────────────────
@@ -753,6 +767,9 @@
     const cur = document.documentElement.dataset.theme || "light";
     const next = applyTheme(cur === "dark" ? "light" : "dark");
     api("/api/theme", { theme: next }).catch(() => {});
+  });
+  $("#themeToggleApp")?.addEventListener("click", () => {
+    $("#themeToggle").click();
   });
   loadTheme();
 

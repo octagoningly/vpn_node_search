@@ -22,17 +22,14 @@
         <button class="nav-item active" data-page="home">
           <span class="nav-icon">◎</span> 运行
         </button>
-        <button class="nav-item" data-page="pool">
-          <span class="nav-icon">◈</span> IP 池
-        </button>
-        <button class="nav-item" data-page="filter">
-          <span class="nav-icon">⚙</span> 筛选评分
-        </button>
-        <button class="nav-item" data-page="keys">
-          <span class="nav-icon">✦</span> 密钥
-        </button>
         <button class="nav-item" data-page="result">
           <span class="nav-icon">☰</span> 结果
+        </button>
+        <button class="nav-item" data-page="pool">
+          <span class="nav-icon">◈</span> 候选
+        </button>
+        <button class="nav-item" data-page="keys">
+          <span class="nav-icon">⚙</span> 设置
         </button>
       </nav>
 
@@ -50,12 +47,12 @@
 
     <!-- Main -->
     <main class="main">
-      <!-- HOME -->
+      <!-- ══ 运行 ══ -->
       <section class="page active" id="page-home">
         <header class="page-head">
           <div>
             <h1>运行</h1>
-            <p class="lead">一键搜集 → 实测 → 评分 → 发布到你的 edgetunnel</p>
+            <p class="lead">一键搜集 → 实测 → 评分 → 发布</p>
           </div>
           <button class="btn btn-primary btn-lg" id="btnRun">开始运行</button>
         </header>
@@ -72,27 +69,20 @@
           </div>
 
           <div class="card">
-            <div class="card-label">发布地址</div>
-            <div class="code-block" id="publishUrl">https://raw.githubusercontent.com/&lt;user&gt;/&lt;repo&gt;/public/cf-addapi.txt</div>
-            <p class="hint">复制到 edgetunnel「自定义优选」，之后自动更新</p>
-            <button class="btn btn-ghost" id="btnCopyUrl">复制链接</button>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-label">定时运行</div>
-          <div class="switch-row">
-            <div>
-              <div class="switch-title">每天自动测速并发布</div>
-              <div class="hint">写入 Windows 任务计划；关机不保证准点，可设「错过后补跑」</div>
+            <div class="card-label">定时运行</div>
+            <div class="switch-row">
+              <div>
+                <div class="switch-title">每天自动测速并发布</div>
+                <div class="hint">写入 Windows 任务计划；关机不保证准点</div>
+              </div>
+              <div class="row">
+                <input class="input" id="scheduleTime" type="time" value="03:00" style="max-width:120px" />
+                <button class="btn btn-primary" id="btnScheduleSave">启用</button>
+                <button class="btn btn-ghost" id="btnScheduleOff">关闭</button>
+              </div>
             </div>
-            <div class="row">
-              <input class="input" id="scheduleTime" type="time" value="03:00" style="max-width:120px" />
-              <button class="btn btn-primary" id="btnScheduleSave">启用</button>
-              <button class="btn btn-ghost" id="btnScheduleOff">关闭</button>
-            </div>
+            <div class="result-note" id="scheduleStatus" hidden></div>
           </div>
-          <div class="result-note" id="scheduleStatus" hidden></div>
         </div>
 
         <div class="card">
@@ -102,11 +92,57 @@
         </div>
       </section>
 
-      <!-- POOL -->
+      <!-- ══ 结果 ══ -->
+      <section class="page" id="page-result">
+        <header class="page-head">
+          <div>
+            <h1>结果</h1>
+            <p class="lead">入榜节点 · 速度-纯净度-稳定性-国家</p>
+          </div>
+          <div class="row">
+            <button class="btn btn-ghost" id="btnRefreshResult">刷新</button>
+            <button class="btn btn-primary" id="btnOpenOutput">打开目录</button>
+          </div>
+        </header>
+
+        <div class="stats" id="resultStats">
+          <div class="stat"><div class="stat-n">—</div><div class="stat-l">入榜</div></div>
+          <div class="stat"><div class="stat-n">—</div><div class="stat-l">平均速度</div></div>
+          <div class="stat"><div class="stat-n">—</div><div class="stat-l">最快</div></div>
+          <div class="stat"><div class="stat-n">—</div><div class="stat-l">国家数</div></div>
+        </div>
+
+        <div class="result-note" id="resultNote" hidden></div>
+
+        <div class="card">
+          <div class="card-label">发布地址 · 粘到 edgetunnel「自定义优选」</div>
+          <div class="code-block" id="publishUrl">https://raw.githubusercontent.com/&lt;user&gt;/&lt;repo&gt;/public/cf-addapi.txt</div>
+          <div class="row" style="margin-top:10px">
+            <button class="btn btn-primary" id="btnCopyUrl">复制链接</button>
+            <span class="hint">之后本工具运行完会自动更新，链接不变</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="table-wrap">
+            <table class="table" id="resultTable">
+              <thead>
+                <tr>
+                  <th>#</th><th>节点</th><th>速度</th><th>纯净度</th>
+                  <th>稳定性</th><th>国家</th><th>综合分</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ 候选 ══ -->
       <section class="page" id="page-pool">
         <header class="page-head">
           <div>
-            <h1>IP 池</h1>
+            <h1>候选</h1>
             <p class="lead">手动导入，或从 GitHub / 订阅源自动发现</p>
           </div>
         </header>
@@ -157,215 +193,192 @@
         </div>
       </section>
 
-      <!-- FILTER -->
-      <section class="page" id="page-filter">
-        <header class="page-head">
-          <div>
-            <h1>筛选评分</h1>
-            <p class="lead">拖动调整权重，速度是硬性门槛</p>
-          </div>
-          <button class="btn btn-primary" id="btnSaveFilter">保存设置</button>
-        </header>
-
-        <div class="grid-2">
-          <div class="card">
-            <div class="card-label">评分权重</div>
-            <div class="slider-row" data-key="speed">
-              <div class="slider-head"><span>速度</span><b>0.17</b></div>
-              <input type="range" min="0" max="1" step="0.01" value="0.17" />
-            </div>
-            <div class="slider-row" data-key="purity">
-              <div class="slider-head"><span>纯净度</span><b>0.15</b></div>
-              <input type="range" min="0" max="1" step="0.01" value="0.15" />
-            </div>
-            <div class="slider-row" data-key="stability">
-              <div class="slider-head"><span>稳定性</span><b>0.15</b></div>
-              <input type="range" min="0" max="1" step="0.01" value="0.15" />
-            </div>
-            <div class="slider-row" data-key="latency">
-              <div class="slider-head"><span>延迟</span><b>0.17</b></div>
-              <input type="range" min="0" max="1" step="0.01" value="0.17" />
-            </div>
-            <div class="slider-row" data-key="compatibility">
-              <div class="slider-head"><span>兼容性</span><b>0.25</b></div>
-              <input type="range" min="0" max="1" step="0.01" value="0.25" />
-            </div>
-            <div class="slider-row" data-key="loss">
-              <div class="slider-head"><span>丢包</span><b>0.11</b></div>
-              <input type="range" min="0" max="1" step="0.01" value="0.11" />
-            </div>
-          </div>
-
-          <div class="card">
-            <div class="card-label">硬性门槛</div>
-            <label class="field">
-              <span>最小速度 (MB/s)</span>
-              <input class="input" id="minSpeed" type="number" step="0.1" value="0.5" />
-            </label>
-            <label class="field">
-              <span>最大延迟 (ms)</span>
-              <input class="input" id="maxLatency" type="number" value="800" />
-            </label>
-            <label class="field">
-              <span>最大风险（纯净度）</span>
-              <input class="input" id="maxRisk" type="number" value="50" />
-            </label>
-
-            <div class="card-label" style="margin-top:20px">测速环境</div>
-            <div class="switch-row">
-              <div>
-                <div class="switch-title">绕过本地代理</div>
-                <div class="hint">测速时忽略 Clash / 系统代理，测到节点真实速度</div>
-              </div>
-              <button class="btn btn-ghost" id="btnBypassProxy">已开启</button>
-            </div>
-
-            <div class="card-label" style="margin-top:20px">国家 / 地区</div>
-            <div class="chip-select" id="countryChips">
-              <button class="chip-toggle active" data-v="">全部</button>
-              <button class="chip-toggle" data-v="US">美国</button>
-              <button class="chip-toggle" data-v="JP">日本</button>
-              <button class="chip-toggle" data-v="SG">新加坡</button>
-              <button class="chip-toggle" data-v="HK">香港</button>
-              <button class="chip-toggle" data-v="KR">韩国</button>
-              <button class="chip-toggle" data-v="DE">德国</button>
-              <button class="chip-toggle" data-v="CA">加拿大</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-label">导出备注模板</div>
-          <input class="input" id="remarkTpl" value="speed-purity-stability-country" />
-          <div class="preview" id="remarkPreview">104.17.29.227:8443#3.9-1.00-1.00-美国</div>
-          <p class="hint">可用字段：{speed} {purity} {stability} {country}</p>
-        </div>
-      </section>
-
-      <!-- KEYS -->
+      <!-- ══ 设置（密钥 | 测速筛选 | 应用）══ -->
       <section class="page" id="page-keys">
         <header class="page-head">
           <div>
-            <h1>密钥与仓库</h1>
-            <p class="lead">只存本机 .env。一键直达注册页，粘贴即可</p>
+            <h1>设置</h1>
+            <p class="lead">密钥 · 测速筛选 · 应用偏好</p>
           </div>
-          <button class="btn btn-primary" id="btnSaveKeys">保存</button>
+          <button class="btn btn-primary" id="btnSaveKeys">保存密钥</button>
         </header>
 
-        <div class="card">
-          <div class="card-label">GitHub</div>
-          <div class="key-row">
-            <div class="key-meta">
-              <div class="key-name">GITHUB_TOKEN</div>
-              <div class="key-desc">用于搜索候选源、推送 public 分支</div>
+        <div class="tabs" id="settingsTabs">
+          <button class="tab active" data-tab="tab-keys">密钥</button>
+          <button class="tab" data-tab="tab-filter">测速筛选</button>
+          <button class="tab" data-tab="tab-app">应用</button>
+        </div>
+
+        <!-- Tab: 密钥 -->
+        <div class="tab-panel active" id="tab-keys">
+          <div class="card">
+            <div class="card-label">GitHub</div>
+            <div class="key-row">
+              <div class="key-meta">
+                <div class="key-name">GITHUB_TOKEN</div>
+                <div class="key-desc">用于搜索候选源、推送 public 分支</div>
+              </div>
+              <input class="input key-input" id="keyGithub" type="password" placeholder="ghp_… 或 github_pat_…" />
+              <a class="btn btn-primary" href="https://github.com/settings/tokens/new?scopes=public_repo&description=NodeBench&expires=0"
+                 target="_blank" rel="noreferrer">① 前往创建 Token →</a>
             </div>
-            <input class="input key-input" id="keyGithub" type="password" placeholder="ghp_… 或 github_pat_…" />
-            <a class="btn btn-primary" href="https://github.com/settings/tokens/new?scopes=public_repo&description=NodeBench&expires=0"
-               target="_blank" rel="noreferrer">① 前往创建 Token →</a>
-          </div>
-          <div class="howto" style="margin-top:12px">
-            <div class="howto-step">② <b>Expiration</b> 选 <b>No expiration</b>（永久有效）</div>
-            <div class="howto-step">③ 只勾 <b>public_repo</b> → 点底部 <b>Generate token</b></div>
-            <div class="howto-step">④ 复制 ghp_ 开头令牌 → 粘贴到左边 → 点右上「保存」</div>
-          </div>
-          <div class="row" style="margin-top:14px">
-            <button class="btn btn-primary" id="btnCreateRepo">一键创建公开仓库</button>
-            <input class="input" id="repoName" value="cf-ip-pool" style="max-width:220px" />
-          </div>
-          <div class="repo-result" id="repoResult"></div>
-        </div>
-
-        <div class="card">
-          <div class="card-label">纯净度</div>
-          <div class="key-row">
-            <div class="key-meta">
-              <div class="key-name">ABUSEIPDB_KEY</div>
-              <div class="key-desc">滥用投诉分 → 纯净度</div>
+            <div class="howto" style="margin-top:12px">
+              <div class="howto-step">② <b>Expiration</b> 选 <b>No expiration</b>（永久有效）</div>
+              <div class="howto-step">③ 只勾 <b>public_repo</b> → 点底部 <b>Generate token</b></div>
+              <div class="howto-step">④ 复制 ghp_ 开头令牌 → 粘贴到左边 → 点右上「保存密钥」</div>
             </div>
-            <input class="input key-input" id="keyAbuse" type="password" placeholder="80 位密钥" />
-            <a class="btn btn-primary" href="https://www.abuseipdb.com/account/api/keys"
-               target="_blank" rel="noreferrer">① 前往获取 Key →</a>
-          </div>
-          <div class="howto" style="margin-top:12px">
-            <div class="howto-step">② 登录后点 <b>Create New Key</b></div>
-            <div class="howto-step">③ 复制 Key → 粘贴到左边 → 保存</div>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-label">属地</div>
-          <div class="key-row">
-            <div class="key-meta">
-              <div class="key-name">IPINFO_TOKEN</div>
-              <div class="key-desc">更准的城市 / 国家 / ASN</div>
+            <div class="row" style="margin-top:14px">
+              <button class="btn btn-primary" id="btnCreateRepo">一键创建公开仓库</button>
+              <input class="input" id="repoName" value="cf-ip-pool" style="max-width:220px" />
             </div>
-            <input class="input key-input" id="keyIpinfo" type="password" placeholder="如 760eddc…" />
-            <a class="btn btn-primary" href="https://ipinfo.io/dashboard"
-               target="_blank" rel="noreferrer">① 前往获取 Token →</a>
+            <div class="repo-result" id="repoResult"></div>
           </div>
-          <div class="howto" style="margin-top:12px">
-            <div class="howto-step">② 在 <b>API Tokens</b> 页复制令牌</div>
-            <div class="howto-step">③ 粘贴到左边 → 保存</div>
-          </div>
-        </div>
 
-        <div class="card">
-          <div class="card-label">应用设置</div>
-          <div class="setting-row">
-            <div>
-              <div style="font-weight:550">开机自启</div>
-              <div class="hint">登录 Windows 后自动在后台启动</div>
+          <div class="card">
+            <div class="card-label">纯净度</div>
+            <div class="key-row">
+              <div class="key-meta">
+                <div class="key-name">ABUSEIPDB_KEY</div>
+                <div class="key-desc">滥用投诉分 → 纯净度</div>
+              </div>
+              <input class="input key-input" id="keyAbuse" type="password" placeholder="80 位密钥" />
+              <a class="btn btn-primary" href="https://www.abuseipdb.com/account/api/keys"
+                 target="_blank" rel="noreferrer">① 前往获取 Key →</a>
             </div>
-            <button class="btn btn-ghost" id="btnAutostart">开启</button>
-          </div>
-          <div class="setting-row">
-            <div>
-              <div style="font-weight:550">关闭时最小化到托盘</div>
-              <div class="hint">关掉窗口不退出，可在托盘图标里恢复</div>
+            <div class="howto" style="margin-top:12px">
+              <div class="howto-step">② 登录后点 <b>Create New Key</b></div>
+              <div class="howto-step">③ 复制 Key → 粘贴到左边 → 保存</div>
             </div>
-            <button class="btn btn-ghost" id="btnTray">已开启</button>
+          </div>
+
+          <div class="card">
+            <div class="card-label">属地</div>
+            <div class="key-row">
+              <div class="key-meta">
+                <div class="key-name">IPINFO_TOKEN</div>
+                <div class="key-desc">更准的城市 / 国家 / ASN</div>
+              </div>
+              <input class="input key-input" id="keyIpinfo" type="password" placeholder="如 760eddc…" />
+              <a class="btn btn-primary" href="https://ipinfo.io/dashboard"
+                 target="_blank" rel="noreferrer">① 前往获取 Token →</a>
+            </div>
+            <div class="howto" style="margin-top:12px">
+              <div class="howto-step">② 在 <b>API Tokens</b> 页复制令牌</div>
+              <div class="howto-step">③ 粘贴到左边 → 保存</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-label">已识别本机 .env</div>
+            <div class="env-detect" id="envDetect">读取中…</div>
           </div>
         </div>
 
-        <div class="card">
-          <div class="card-label">已识别本机 .env</div>
-          <div class="env-detect" id="envDetect">读取中…</div>
-        </div>
-      </section>
+        <!-- Tab: 测速筛选 -->
+        <div class="tab-panel" id="tab-filter">
+          <div class="grid-2">
+            <div class="card">
+              <div class="card-label">评分权重</div>
+              <div class="slider-row" data-key="speed">
+                <div class="slider-head"><span>速度</span><b>0.17</b></div>
+                <input type="range" min="0" max="1" step="0.01" value="0.17" />
+              </div>
+              <div class="slider-row" data-key="purity">
+                <div class="slider-head"><span>纯净度</span><b>0.15</b></div>
+                <input type="range" min="0" max="1" step="0.01" value="0.15" />
+              </div>
+              <div class="slider-row" data-key="stability">
+                <div class="slider-head"><span>稳定性</span><b>0.15</b></div>
+                <input type="range" min="0" max="1" step="0.01" value="0.15" />
+              </div>
+              <div class="slider-row" data-key="latency">
+                <div class="slider-head"><span>延迟</span><b>0.17</b></div>
+                <input type="range" min="0" max="1" step="0.01" value="0.17" />
+              </div>
+              <div class="slider-row" data-key="compatibility">
+                <div class="slider-head"><span>兼容性</span><b>0.25</b></div>
+                <input type="range" min="0" max="1" step="0.01" value="0.25" />
+              </div>
+              <div class="slider-row" data-key="loss">
+                <div class="slider-head"><span>丢包</span><b>0.11</b></div>
+                <input type="range" min="0" max="1" step="0.01" value="0.11" />
+              </div>
+            </div>
 
-      <!-- RESULT -->
-      <section class="page" id="page-result">
-        <header class="page-head">
-          <div>
-            <h1>结果</h1>
-            <p class="lead">入榜节点 · 速度-纯净度-稳定性-国家</p>
+            <div class="card">
+              <div class="card-label">硬性门槛</div>
+              <label class="field">
+                <span>最小速度 (MB/s)</span>
+                <input class="input" id="minSpeed" type="number" step="0.1" value="0.5" />
+              </label>
+              <label class="field">
+                <span>最大延迟 (ms)</span>
+                <input class="input" id="maxLatency" type="number" value="800" />
+              </label>
+              <label class="field">
+                <span>最大风险（纯净度）</span>
+                <input class="input" id="maxRisk" type="number" value="50" />
+              </label>
+
+              <div class="card-label" style="margin-top:20px">测速环境</div>
+              <div class="switch-row">
+                <div>
+                  <div class="switch-title">绕过本地代理</div>
+                  <div class="hint">测速时忽略 Clash / 系统代理，测到节点真实速度</div>
+                </div>
+                <button class="btn btn-ghost" id="btnBypassProxy">已开启</button>
+              </div>
+
+              <div class="card-label" style="margin-top:20px">国家 / 地区</div>
+              <div class="chip-select" id="countryChips">
+                <button class="chip-toggle active" data-v="">全部</button>
+                <button class="chip-toggle" data-v="US">美国</button>
+                <button class="chip-toggle" data-v="JP">日本</button>
+                <button class="chip-toggle" data-v="SG">新加坡</button>
+                <button class="chip-toggle" data-v="HK">香港</button>
+                <button class="chip-toggle" data-v="KR">韩国</button>
+                <button class="chip-toggle" data-v="DE">德国</button>
+                <button class="chip-toggle" data-v="CA">加拿大</button>
+              </div>
+            </div>
           </div>
-          <div class="row">
-            <button class="btn btn-ghost" id="btnRefreshResult">刷新</button>
-            <button class="btn btn-primary" id="btnOpenOutput">打开目录</button>
-          </div>
-        </header>
 
-        <div class="stats" id="resultStats">
-          <div class="stat"><div class="stat-n">—</div><div class="stat-l">入榜</div></div>
-          <div class="stat"><div class="stat-n">—</div><div class="stat-l">平均速度</div></div>
-          <div class="stat"><div class="stat-n">—</div><div class="stat-l">最快</div></div>
-          <div class="stat"><div class="stat-n">—</div><div class="stat-l">国家数</div></div>
+          <div class="card">
+            <div class="card-label">导出备注模板</div>
+            <input class="input" id="remarkTpl" value="speed-purity-stability-country" />
+            <div class="preview" id="remarkPreview">104.17.29.227:8443#3.9-1.00-1.00-美国</div>
+            <p class="hint">可用字段：{speed} {purity} {stability} {country}</p>
+            <div class="row" style="margin-top:12px">
+              <button class="btn btn-primary" id="btnSaveFilter">保存筛选设置</button>
+            </div>
+          </div>
         </div>
 
-        <div class="result-note" id="resultNote" hidden></div>
-
-        <div class="card">
-          <div class="table-wrap">
-            <table class="table" id="resultTable">
-              <thead>
-                <tr>
-                  <th>#</th><th>节点</th><th>速度</th><th>纯净度</th>
-                  <th>稳定性</th><th>国家</th><th>综合分</th>
-                </tr>
-              </thead>
-              <tbody></tbody>
-            </table>
+        <!-- Tab: 应用 -->
+        <div class="tab-panel" id="tab-app">
+          <div class="card">
+            <div class="card-label">应用设置</div>
+            <div class="setting-row">
+              <div>
+                <div style="font-weight:550">开机自启</div>
+                <div class="hint">登录 Windows 后自动在后台启动</div>
+              </div>
+              <button class="btn btn-ghost" id="btnAutostart">开启</button>
+            </div>
+            <div class="setting-row">
+              <div>
+                <div style="font-weight:550">关闭时最小化到托盘</div>
+                <div class="hint">关掉窗口不退出，可在托盘图标里恢复</div>
+              </div>
+              <button class="btn btn-ghost" id="btnTray">已开启</button>
+            </div>
+            <div class="setting-row">
+              <div>
+                <div style="font-weight:550">深色模式</div>
+                <div class="hint">与左下角开关同步，重启后保持</div>
+              </div>
+              <button class="btn btn-ghost" id="themeToggleApp">切换</button>
+            </div>
           </div>
         </div>
       </section>
