@@ -81,16 +81,94 @@ def _country_code(raw: Any) -> str | None:
     return None
 
 
+# CFST reports IATA airport codes (HKG, SIN, NRT…). Those are 3-letter and
+# would otherwise fall through to IPinfo's Cloudflare-anycast "US" registration.
+_IATA_TO_ISO = {
+    "HKG": "HK",
+    "HHT": "HK",
+    "TPE": "TW",
+    "TSA": "TW",
+    "KHH": "TW",
+    "TXG": "TW",
+    "NRT": "JP",
+    "HND": "JP",
+    "KIX": "JP",
+    "NGO": "JP",
+    "FUK": "JP",
+    "CTS": "JP",
+    "SIN": "SG",
+    "ICN": "KR",
+    "GMP": "KR",
+    "PUS": "KR",
+    "LAX": "US",
+    "SJC": "US",
+    "SFO": "US",
+    "SEA": "US",
+    "ORD": "US",
+    "EWR": "US",
+    "IAD": "US",
+    "ATL": "US",
+    "DFW": "US",
+    "DEN": "US",
+    "MIA": "US",
+    "JFK": "US",
+    "BOS": "US",
+    "MSP": "US",
+    "DFW": "US",
+    "YYZ": "CA",
+    "YVR": "CA",
+    "LHR": "GB",
+    "LGW": "GB",
+    "FRA": "DE",
+    "MUC": "DE",
+    "AMS": "NL",
+    "CDG": "FR",
+    "MAD": "ES",
+    "ARN": "SE",
+    "HEL": "FI",
+    "WAW": "PL",
+    "ARN": "SE",
+    "DXB": "AE",
+    "DOH": "QA",
+    "BOM": "IN",
+    "DEL": "IN",
+    "SIN": "SG",
+    "KUL": "MY",
+    "BKK": "TH",
+    "CGK": "ID",
+    "MNL": "PH",
+    "SGN": "VN",
+    "HAN": "VN",
+    "SYD": "AU",
+    "MEL": "AU",
+    "AKL": "NZ",
+    "GRU": "BR",
+    "MEX": "MX",
+    "JNB": "ZA",
+    "IST": "TR",
+    "SVO": "RU",
+    "LED": "RU",
+}
+
+
+def _region_country(region: Any) -> str | None:
+    if not isinstance(region, str):
+        return None
+    code = region.strip().upper()
+    if not code:
+        return None
+    mapped = _IATA_TO_ISO.get(code)
+    if mapped is not None:
+        return mapped
+    return _country_code(code)
+
+
 def _param_country(params: Mapping[str, Any]) -> str | None:
     for name in ("country", "country_code"):
         found = _country_code(params.get(name))
         if found is not None:
             return found
-    return _country_code(params.get("region"))
-
-
-def _region_country(region: Any) -> str | None:
-    return _country_code(region)
+    return _region_country(params.get("region"))
 
 
 def _looks_like_cf_anycast(
@@ -388,9 +466,11 @@ def _score_endpoint(
         host_compatible = result.host_compatible
         result_region = str(result.region or "")
 
-    country = _param_country(edge.params)
+    # CFST region is the measured landing PoP — prefer it over static
+    # params / IPinfo registration (Cloudflare anycast is always "US").
+    country = _region_country(result_region)
     if country is None:
-        country = _region_country(result_region)
+        country = _param_country(edge.params)
     if country is None:
         country = _region_country(edge.params.get("region"))
 

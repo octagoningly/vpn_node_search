@@ -681,6 +681,21 @@ class TestEndpointScoring:
         )
         assert report.endpoints[0].country_code == "SG"
 
+    def test_country_from_iata_region_beats_us_registration(self) -> None:
+        """HKG must become HK, not Cloudflare-anycast IPinfo 'US'."""
+        report = run_score(
+            edges=(make_edge("e1", risk=10.0, country_code="US"),),
+            results=(make_eok("e1", region="HKG"),),
+        )
+        assert report.endpoints[0].country_code == "HK"
+
+    def test_country_from_iata_nrt_is_jp(self) -> None:
+        report = run_score(
+            edges=(make_edge("e1", risk=10.0),),
+            results=(make_eok("e1", region="NRT"),),
+        )
+        assert report.endpoints[0].country_code == "JP"
+
     def test_country_from_geo_lookup(self) -> None:
         calls: list[str] = []
 
