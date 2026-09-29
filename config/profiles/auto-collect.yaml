@@ -16,11 +16,6 @@ sources:
       - https://raw.githubusercontent.com/cmliu/WorkerVless2sub/main/addressesipv6api.txt
       # CF 优选 IP 公开清单
       - https://raw.githubusercontent.com/cmliu/CFcdnVmess2sub/main/addressesapi.txt
-      - https://raw.githubusercontent.com/cmliu/CFcdnVmess2sub/main/addressescsv.csv
-      - https://raw.githubusercontent.com/cmliu/CFcdnVmess2sub/main/addressesipv6api.txt
-      # edgetunnel 相关公开优选清单
-      - https://raw.githubusercontent.com/cmliu/edgetunnel/main/addressesapi.txt
-      - https://raw.githubusercontent.com/cmliu/edgetunnel/main/addressescsv.csv
     timeout_s: 20
     license_tag: "MIT"
     offline: false

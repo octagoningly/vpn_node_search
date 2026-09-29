@@ -35,7 +35,11 @@ def _quote(value: str) -> str:
 
 def _wrap_command(task: ScheduledTask) -> str:
     executable = sys.executable or "python"
+    root = Path(task.root) if task.root else Path.cwd()
+    # Task Scheduler starts in System32 — without an explicit cwd the
+    # relative candidates/*.txt and config paths all miss.
     inner = (
+        f'cd /d "{root}" && '
         f'"{executable}" -m nodebench.cli.main run --profile "{task.profile}"'
         f' >> "{task.log_path}" 2>&1'
     )

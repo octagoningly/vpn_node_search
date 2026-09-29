@@ -74,6 +74,8 @@ def test_wrap_command_redirects_into_project_log():
     wrapped = argv[argv.index("/TR") + 1]
     assert wrapped.startswith('cmd.exe /c "')
     assert wrapped.endswith('"')
+    assert "cd /d" in wrapped
+    assert task.root in wrapped
     assert "-m nodebench.cli.main run" in wrapped
     assert f'--profile "local"' in wrapped
     assert f'>> "{task.log_path}" 2>&1' in wrapped
