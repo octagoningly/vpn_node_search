@@ -15,11 +15,11 @@ from nodebench.core.schema import (
     ScoreReport,
 )
 from nodebench.intelligence.geo import GeoResult
+from nodebench.intelligence.lookups import make_geo_lookup
 from nodebench.scoring import (
     SCORING_VERSION,
     latency_score,
     loss_score,
-    make_geo_lookup,
     purity_score,
     score_run,
     speed_score,

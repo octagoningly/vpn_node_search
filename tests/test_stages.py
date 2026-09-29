@@ -4,9 +4,9 @@ from datetime import datetime, timezone
 
 from nodebench.core.context import build_run_context
 from nodebench.core.errors import StorageError
-from nodebench.core.orchestrator import resolve_run_exit, run_pipeline
+from nodebench.pipeline.orchestrator import resolve_run_exit, run_pipeline
 from nodebench.core.schema import RawItem
-from nodebench.core.stages import license_entries, run_post_stages
+from nodebench.pipeline.stages import license_entries, run_post_stages
 
 from test_orchestrator import CLEAN_FILES, DEFAULT_PATH, INPUT_DIR, local_config
 
@@ -80,7 +80,7 @@ def test_license_entries_are_sorted_unique_and_default_unknown():
 
 
 def test_stage_exit_uses_export_and_publish_semantics():
-    from nodebench.core.orchestrator import _stage_exit
+    from nodebench.pipeline.orchestrator import _stage_exit
 
     assert _stage_exit({}) == 0
     assert _stage_exit({"persist": {"status": "ok"}}) == 0
@@ -123,7 +123,7 @@ def test_post_stages_stop_after_persist_failure(tmp_path, monkeypatch):
     def boom(*_args, **_kwargs):
         raise StorageError(code="disk_full", message="no space left")
 
-    monkeypatch.setattr("nodebench.core.stages.persist_run", boom)
+    monkeypatch.setattr("nodebench.pipeline.stages.persist_run", boom)
 
     report = run_post_stages(
         make_report(),

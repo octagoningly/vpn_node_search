@@ -9,7 +9,7 @@ from typing import Any
 from nodebench.core.config import AppConfig, CfSourceConfig
 from nodebench.core.schema import USER_SUPPLIED_LICENSE_TAG, ErrorInfo, RawItem, SourceReport
 from nodebench.sources.base import BOM, make_error, resolve_base_dir
-from nodebench.sources.http_utils import is_private_host
+from nodebench.core.http_utils import is_private_host
 
 # Conservative DNS hostname: labels 1-63 chars, alnum + hyphen, not starting/ending with hyphen.
 _HOSTNAME_RE = re.compile(

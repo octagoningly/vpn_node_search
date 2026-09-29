@@ -28,7 +28,7 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/nodebench"]
+packages = ["src/nodebench", "gui"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

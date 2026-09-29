@@ -18,10 +18,8 @@ from pathlib import Path
 
 import pytest
 
-from nodebench.cli.main import (
-    DOCTOR_MESSAGE,
-    main,
-)
+from nodebench.cli.common import DOCTOR_MESSAGE
+from nodebench.cli.main import main
 from nodebench.core.config import load_config
 from nodebench.core.context import (
     build_run_context,
@@ -30,7 +28,7 @@ from nodebench.core.context import (
     register_secrets,
 )
 from nodebench.core.errors import EXIT_SOURCES
-from nodebench.core.orchestrator import resolve_run_exit, run_pipeline
+from nodebench.pipeline.orchestrator import resolve_run_exit, run_pipeline
 from nodebench.core.schema import (
     EdgeEndpoint,
     FailureStage,
@@ -319,7 +317,7 @@ def test_a1_doctor_platform_python_check_present(capsys):
 
 
 def test_a2_candidates_carry_source_id_and_license_tag(tmp_path: Path):
-    from nodebench.core.stages import license_entries
+    from nodebench.pipeline.stages import license_entries
 
     source = write(
         tmp_path / "nodes.txt",
@@ -489,7 +487,7 @@ def test_a4_tcp_success_is_not_proxy_available():
         error_message="download failed",
     )
     assert failed.status is not ProbeStatus.OK
-    from nodebench.core.orchestrator import _probe_summary
+    from nodebench.pipeline.orchestrator import _probe_summary
 
     summary = _probe_summary([failed], "mihomo")
     assert summary["usable_real"] == 0
@@ -550,7 +548,7 @@ def test_a4_measurements_carry_units_time_and_runner_id():
 
 
 def test_a4_simulated_stand_in_is_not_counted_available():
-    from nodebench.core.orchestrator import _probe_summary
+    from nodebench.pipeline.orchestrator import _probe_summary
 
     simulated = make_proxy_probe(
         status=ProbeStatus.OK,

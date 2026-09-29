@@ -4,26 +4,13 @@ import csv
 import io
 import ipaddress
 
-from nodebench.core.schema import ParsedEndpoint
+from nodebench.core.schema import HEADER_FULL, HEADER_TWO, ParsedEndpoint
 from nodebench.parsers.common import (
     INVALID_ROW,
     INVALID_PORT,
     make_issue,
     parse_port,
 )
-
-HEADER_FULL = [
-    "IP地址",
-    "端口",
-    "回源端口",
-    "TLS",
-    "数据中心",
-    "地区",
-    "城市",
-    "TCP延迟(ms)",
-    "速度(MB/s)",
-]
-HEADER_TWO = ["ip", "port"]
 
 # Historical measurements live in ``params`` only. They must never be copied
 # into this-run measurement fields (RankedEndpoint.latency_ms / speed_mb_s).

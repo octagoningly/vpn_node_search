@@ -5,7 +5,7 @@ from typing import Any
 import yaml
 
 from nodebench.core.schema import ProxyNode
-from nodebench.parsers.common import default_transport, sanitize_token
+from nodebench.core.fields import default_transport, sanitize_token
 
 PROXY_CLASH_NAME = "proxy-clash.yaml"
 

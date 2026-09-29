@@ -231,6 +231,51 @@ PROBE_ERROR_CODES = frozenset(
     }
 )
 
+# Probe skip vocabulary shared by probes, publishing gates and reports.
+REASON_DISABLED = "disabled"
+REASON_MISSING_BINARY = "missing_binary"
+REASON_MISSING_SPEEDTEST_URL = "missing_speedtest_url"
+REASON_MISSING_TARGET_HOST = "missing_target_host"
+REASON_BUDGET_EXHAUSTED = "budget_exhausted"
+REASON_LIMIT_EXCEEDED = "probe_limit_exceeded"
+REASON_NOT_RUN = "not_run"
+REASON_DRY_RUN = "dry_run"
+REASON_NO_CANDIDATES = "no_candidates"
+
+SKIP_REASONS = frozenset(
+    {
+        REASON_DISABLED,
+        REASON_MISSING_BINARY,
+        REASON_MISSING_SPEEDTEST_URL,
+        REASON_MISSING_TARGET_HOST,
+        REASON_BUDGET_EXHAUSTED,
+        REASON_LIMIT_EXCEEDED,
+    }
+)
+CAPABILITY_SKIP_REASONS = frozenset(
+    {
+        REASON_MISSING_BINARY,
+        REASON_MISSING_SPEEDTEST_URL,
+        REASON_MISSING_TARGET_HOST,
+        REASON_BUDGET_EXHAUSTED,
+        REASON_LIMIT_EXCEEDED,
+    }
+)
+
+# CF addcsv column contract (WorkerVless2sub 9-column header).
+HEADER_FULL = [
+    "IP地址",
+    "端口",
+    "回源端口",
+    "TLS",
+    "数据中心",
+    "地区",
+    "城市",
+    "TCP延迟(ms)",
+    "速度(MB/s)",
+]
+HEADER_TWO = ["ip", "port"]
+
 
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc).replace(microsecond=0)
@@ -783,6 +828,19 @@ __all__ = [
     "FailureStage",
     "ProbeMode",
     "PROBE_ERROR_CODES",
+    "REASON_DISABLED",
+    "REASON_MISSING_BINARY",
+    "REASON_MISSING_SPEEDTEST_URL",
+    "REASON_MISSING_TARGET_HOST",
+    "REASON_BUDGET_EXHAUSTED",
+    "REASON_LIMIT_EXCEEDED",
+    "REASON_NOT_RUN",
+    "REASON_DRY_RUN",
+    "REASON_NO_CANDIDATES",
+    "SKIP_REASONS",
+    "CAPABILITY_SKIP_REASONS",
+    "HEADER_FULL",
+    "HEADER_TWO",
     "ProbeResultBase",
     "ProxyProbeResult",
     "EndpointProbeResult",

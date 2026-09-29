@@ -6,7 +6,7 @@ from typing import Any
 from urllib.parse import quote, urlencode
 
 from nodebench.core.schema import ProxyNode
-from nodebench.parsers.common import default_transport, sanitize_token
+from nodebench.core.fields import default_transport, sanitize_token
 
 URI_SCHEMES = frozenset({"vless", "vmess", "trojan", "ss", "hysteria2", "tuic"})
 

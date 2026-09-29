@@ -4,7 +4,7 @@ from pathlib import Path
 
 from nodebench.core.config import AppConfig, load_config
 from nodebench.core.context import build_run_context
-from nodebench.core.orchestrator import run_pipeline
+from nodebench.pipeline.orchestrator import run_pipeline
 from nodebench.core.serialization import dumps_json
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]

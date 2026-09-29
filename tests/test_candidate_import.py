@@ -10,7 +10,7 @@ from nodebench.core.config import (
     CfSourceConfig,
     SourcesConfig,
 )
-from nodebench.core.orchestrator import run_pipeline
+from nodebench.pipeline.orchestrator import run_pipeline
 from nodebench.core.schema import RunContext
 from nodebench.normalize import dedupe, normalize_all
 from nodebench.parsers import parse_raw_item

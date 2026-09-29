@@ -25,7 +25,7 @@ from nodebench.exporters.cf_addapi import CF_ADDAPI_NAME
 from nodebench.exporters.cf_addcsv import CF_ADDCSV_NAME
 from nodebench.exporters.manifest import MANIFEST_NAME
 from nodebench.exporters.report import REPORT_NAME
-from nodebench.sources.http_utils import (
+from nodebench.core.http_utils import (
     DEFAULT_USER_AGENT,
     HttpError,
     is_private_host,

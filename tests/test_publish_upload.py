@@ -16,7 +16,7 @@ from nodebench.core.config import (
 )
 from nodebench.core.errors import ConfigError, PublishError
 from nodebench.core.schema import ScoreReport
-from nodebench.core.stages import (
+from nodebench.pipeline.stages import (
     load_export_outcome,
     publish_artifacts,
     run_publish_stage,

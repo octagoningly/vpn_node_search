@@ -14,7 +14,7 @@ from nodebench.core.errors import (
     EXIT_SOURCES,
     ProbeError,
 )
-from nodebench.core.orchestrator import _probe_summary, resolve_run_exit, run_pipeline
+from nodebench.pipeline.orchestrator import _probe_summary, resolve_run_exit, run_pipeline
 from nodebench.core.schema import (
     PROBE_ERROR_CODES,
     EndpointProbeResult,

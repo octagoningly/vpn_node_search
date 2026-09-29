@@ -14,9 +14,9 @@ from nodebench.core.config import (
     SubscriptionSourceConfig,
 )
 from nodebench.sources import github as github_mod
-from nodebench.sources import http_utils
+from nodebench.core import http_utils
 from nodebench.sources import subscriptions as subs_mod
-from nodebench.sources.http_utils import HttpError, controlled_get
+from nodebench.core.http_utils import HttpError, controlled_get
 
 
 class FakeHeaders(dict):

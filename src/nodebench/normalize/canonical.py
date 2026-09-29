@@ -1,13 +1,6 @@
 from __future__ import annotations
 
-from nodebench.core.schema import (
-    FINGERPRINT_VERSION,
-    EdgeEndpoint,
-    ProtocolSupport,
-    ProxyNode,
-)
-from nodebench.normalize.fingerprint import fingerprint_endpoint, fingerprint_proxy
-from nodebench.parsers.common import (
+from nodebench.core.fields import (
     INVALID_PORT,
     MISSING_SERVER,
     UNSUPPORTED_PROTOCOL,
@@ -15,6 +8,13 @@ from nodebench.parsers.common import (
     normalize_server,
     parse_port,
 )
+from nodebench.core.schema import (
+    FINGERPRINT_VERSION,
+    EdgeEndpoint,
+    ProtocolSupport,
+    ProxyNode,
+)
+from nodebench.normalize.fingerprint import fingerprint_endpoint, fingerprint_proxy
 
 
 def _field(obj, name, default=None):

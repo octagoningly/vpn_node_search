@@ -6,7 +6,7 @@ from typing import Any
 
 from nodebench.core.config import AppConfig, CandidateImportConfig
 from nodebench.core.schema import ErrorInfo, RawItem, SourceReport
-from nodebench.parsers.csv import HEADER_FULL
+from nodebench.core.schema import HEADER_FULL
 from nodebench.sources.base import BOM, make_error, resolve_base_dir
 
 SOURCE_ID = "imported"

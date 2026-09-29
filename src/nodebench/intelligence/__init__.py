@@ -11,6 +11,7 @@ from nodebench.intelligence.reputation import (
     normalize_risk,
     risk_level_for,
 )
+from nodebench.intelligence.lookups import make_geo_lookup, make_risk_lookup
 from nodebench.intelligence.service import IntelligenceService
 
 __all__ = [
@@ -19,6 +20,8 @@ __all__ = [
     "GeoLookupError",
     "GeoResult",
     "IntelligenceService",
+    "make_geo_lookup",
+    "make_risk_lookup",
     "NullProvider",
     "ReputationProvider",
     "SimpleHttpReputationProvider",

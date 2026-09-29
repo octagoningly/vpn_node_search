@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from nodebench.core.schema import (
+    CAPABILITY_SKIP_REASONS,
     PUBLIC_VISIBILITY,
     USER_SUPPLIED_LICENSE_TAGS,
     ExportOutcome,
@@ -22,7 +23,6 @@ from nodebench.exporters.clash import PROXY_CLASH_NAME
 from nodebench.exporters.manifest import MANIFEST_NAME
 from nodebench.exporters.raw import PROXY_RAW_NAME
 from nodebench.exporters.report import REPORT_NAME
-from nodebench.probes import CAPABILITY_SKIP_REASONS
 
 REDISTRIBUTIBLE_LICENSE_TAGS = frozenset(
     {

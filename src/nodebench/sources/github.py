@@ -17,7 +17,7 @@ from nodebench.sources.base import (
     content_type_for,
     make_error,
 )
-from nodebench.sources.http_utils import (
+from nodebench.core.http_utils import (
     DEFAULT_USER_AGENT,
     HttpError,
     controlled_get,

@@ -7,12 +7,12 @@ from pathlib import Path
 
 import pytest
 
-from nodebench.cli.main import (
+from nodebench.cli.common import (
     DOCTOR_MESSAGE,
     DOCTOR_MESSAGE_PENDING,
     STUB_MESSAGE,
-    main,
 )
+from nodebench.cli.main import main
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 INPUT_DIR = PROJECT_ROOT / "input"

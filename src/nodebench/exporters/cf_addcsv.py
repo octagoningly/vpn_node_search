@@ -4,7 +4,7 @@ import csv
 import io
 from typing import Iterable, Sequence
 
-from nodebench.parsers.csv import HEADER_FULL
+from nodebench.core.schema import HEADER_FULL
 
 CF_ADDCSV_NAME = "cf-addcsv.csv"
 

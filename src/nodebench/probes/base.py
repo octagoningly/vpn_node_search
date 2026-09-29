@@ -16,7 +16,18 @@ from nodebench.core.config import AppConfig
 from nodebench.core.context import redact
 from nodebench.core.errors import ProbeError
 from nodebench.core.schema import (
+    CAPABILITY_SKIP_REASONS,
     PROBE_ERROR_CODES,
+    REASON_BUDGET_EXHAUSTED,
+    REASON_DISABLED,
+    REASON_DRY_RUN,
+    REASON_LIMIT_EXCEEDED,
+    REASON_MISSING_BINARY,
+    REASON_MISSING_SPEEDTEST_URL,
+    REASON_MISSING_TARGET_HOST,
+    REASON_NOT_RUN,
+    REASON_NO_CANDIDATES,
+    SKIP_REASONS,
     FailureStage,
     ProbeStatus,
     ProxyProbeResult,
@@ -26,35 +37,6 @@ BYTES_PER_MB = 1_000_000
 DEFAULT_DOWNLOAD_MB = 5.0
 MIHOMO_BINARY_NAMES = ("mihomo", "clash")
 CFST_BINARY_NAMES = ("cloudflareSpeedTest", "CloudflareSpeedTest", "cfst")
-
-REASON_DISABLED = "disabled"
-REASON_MISSING_BINARY = "missing_binary"
-REASON_MISSING_SPEEDTEST_URL = "missing_speedtest_url"
-REASON_MISSING_TARGET_HOST = "missing_target_host"
-REASON_BUDGET_EXHAUSTED = "budget_exhausted"
-REASON_LIMIT_EXCEEDED = "probe_limit_exceeded"
-REASON_NOT_RUN = "not_run"
-REASON_DRY_RUN = "dry_run"
-REASON_NO_CANDIDATES = "no_candidates"
-SKIP_REASONS = frozenset(
-    {
-        REASON_DISABLED,
-        REASON_MISSING_BINARY,
-        REASON_MISSING_SPEEDTEST_URL,
-        REASON_MISSING_TARGET_HOST,
-        REASON_BUDGET_EXHAUSTED,
-        REASON_LIMIT_EXCEEDED,
-    }
-)
-CAPABILITY_SKIP_REASONS = frozenset(
-    {
-        REASON_MISSING_BINARY,
-        REASON_MISSING_SPEEDTEST_URL,
-        REASON_MISSING_TARGET_HOST,
-        REASON_BUDGET_EXHAUSTED,
-        REASON_LIMIT_EXCEEDED,
-    }
-)
 
 
 class ProbeTimeout(ProbeError):

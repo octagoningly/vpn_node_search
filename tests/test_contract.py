@@ -8,7 +8,7 @@ import pytest
 
 from nodebench.core.config import load_config
 from nodebench.core.context import build_run_context
-from nodebench.core.orchestrator import run_pipeline
+from nodebench.pipeline.orchestrator import run_pipeline
 from nodebench.core.schema import RUN_ID_PATTERN, SCHEMA_VERSION
 from nodebench.core.serialization import dumps_json, is_forbidden_key, public_dump
 

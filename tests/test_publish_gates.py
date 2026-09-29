@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 from nodebench.core.config import load_config
 from nodebench.core.schema import PublishResult
-from nodebench.core.stages import run_publish_stage
+from nodebench.pipeline.stages import run_publish_stage
 from nodebench.exporters.build import build_export, stage_view
 from nodebench.exporters.cf_addapi import CF_ADDAPI_NAME
 from nodebench.exporters.cf_addcsv import CF_ADDCSV_NAME
@@ -213,7 +213,7 @@ def test_publish_configuration_defaults_disable_publishing(tmp_path: Path):
 
 
 def test_publish_stage_reads_publish_configuration(tmp_path: Path, monkeypatch):
-    import nodebench.core.stages as stages_module
+    import nodebench.pipeline.stages as stages_module
 
     config = load_config(DEFAULT_PATH, None, env={})
     config.output_dir = str(tmp_path / "out")
@@ -302,7 +302,7 @@ def test_export_manifest_records_user_supplied_cf_candidates(tmp_path: Path):
 
 def test_tags_for_prefers_redistributable_over_unknown_on_same_item():
     """A node seen under MIT + unknown must not poison the export gate."""
-    from nodebench.core.stages import _tags_for
+    from nodebench.pipeline.stages import _tags_for
 
     items = [
         SimpleNamespace(status="ranked", source_ids=["subscriptions", "github"]),

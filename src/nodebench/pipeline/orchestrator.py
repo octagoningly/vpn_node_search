@@ -17,7 +17,7 @@ from nodebench.core.errors import (
 from nodebench.core.schema import SCHEMA_VERSION, ParseIssue, ProbeMode, ProbeStatus
 from nodebench.core.protocol_support import support_report
 from nodebench.core.serialization import public_dump
-from nodebench.core.stages import register_node_secrets, run_post_stages
+from nodebench.pipeline.stages import register_node_secrets, run_post_stages
 from nodebench.normalize import dedupe, normalize_all
 from nodebench.parsers import parse_raw_item
 from nodebench.probes import (

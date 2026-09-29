@@ -38,11 +38,11 @@ from nodebench.history.store import (
     persist_run,
     record_intelligence,
 )
-from nodebench.intelligence import IntelligenceService
+from nodebench.intelligence import IntelligenceService, make_geo_lookup, make_risk_lookup
 from nodebench.probes import project_root
 from nodebench.publishing import is_redistributable, publish_output
 from nodebench.publishing.upload import upload_published_files
-from nodebench.scoring import SCORING_VERSION, make_geo_lookup, make_risk_lookup, score_run
+from nodebench.scoring import SCORING_VERSION, score_run
 
 STAGE_ORDER = ("inspect", "persist", "score", "export", "publish")
 EXPORT_DIR_NAME = "export"
