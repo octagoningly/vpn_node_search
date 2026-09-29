@@ -321,6 +321,30 @@ def push_public_branch() -> tuple[bool, str]:
         return False, str(exc)
 
 
+def run_scheduler_cli(*args: str) -> dict:
+    """Invoke `nodebench scheduler …` — GUI stays a process shell (no biz imports)."""
+    proc = subprocess.run(
+        ["uv", "run", "nodebench", "scheduler", *args, "--json"],
+        cwd=_project_root(),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        shell=(os.name == "nt"),
+    )
+    out = (proc.stdout or "").strip()
+    if not out:
+        return {"ok": False, "error": (proc.stderr or "no output")[-400:], "code": proc.returncode}
+    try:
+        data = json.loads(out)
+    except json.JSONDecodeError:
+        return {"ok": False, "error": out[-400:], "code": proc.returncode}
+    if isinstance(data, dict):
+        data.setdefault("ok", proc.returncode == 0)
+        return data
+    return {"ok": proc.returncode == 0, "items": data}
+
+
 def run_worker() -> None:
     _state.update(
         running=True,
@@ -709,6 +733,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(dict(_state))
         if path == "/api/results":
             return self._json(load_results())
+        if path == "/api/scheduler/status":
+            return self._json(run_scheduler_cli("status"))
         self._json({"error": "not found"}, 404)
 
     def do_POST(self) -> None:
@@ -848,6 +874,25 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json({"ok": False, "error": "已在运行"}, 409)
                 threading.Thread(target=run_worker, daemon=True).start()
                 return self._json({"ok": True})
+
+            if path == "/api/scheduler/install":
+                time_value = str(body.get("time") or "03:00").strip() or "03:00"
+                profile = str(body.get("profile") or "auto-collect").strip()
+                result = run_scheduler_cli(
+                    "install",
+                    "--profile",
+                    profile,
+                    "--time",
+                    time_value,
+                    "--yes",
+                )
+                result["time"] = time_value
+                result["profile"] = profile
+                return self._json(result)
+
+            if path == "/api/scheduler/uninstall":
+                result = run_scheduler_cli("uninstall", "--yes")
+                return self._json(result)
 
             if path == "/api/open-output":
                 out = _output_base()

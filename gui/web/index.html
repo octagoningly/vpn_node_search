@@ -80,6 +80,22 @@
         </div>
 
         <div class="card">
+          <div class="card-label">定时运行</div>
+          <div class="switch-row">
+            <div>
+              <div class="switch-title">每天自动测速并发布</div>
+              <div class="hint">写入 Windows 任务计划；关机不保证准点，可设「错过后补跑」</div>
+            </div>
+            <div class="row">
+              <input class="input" id="scheduleTime" type="time" value="03:00" style="max-width:120px" />
+              <button class="btn btn-primary" id="btnScheduleSave">启用</button>
+              <button class="btn btn-ghost" id="btnScheduleOff">关闭</button>
+            </div>
+          </div>
+          <div class="result-note" id="scheduleStatus" hidden></div>
+        </div>
+
+        <div class="card">
           <div class="card-label">日志</div>
           <pre class="log" id="runLog">就绪。点击「开始运行」启动完整流程。</pre>
           <div class="result-note" id="runSummary" hidden></div>

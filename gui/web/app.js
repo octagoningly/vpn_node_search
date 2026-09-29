@@ -212,6 +212,64 @@
     navigator.clipboard.writeText(text).then(() => toast("已复制"));
   });
 
+  // ── scheduler ──────────────────────────────────
+  async function refreshSchedule() {
+    const el = $("#scheduleStatus");
+    if (!el) return;
+    try {
+      const r = await api("/api/scheduler/status");
+      const items = r.statuses || r.items || [];
+      if (!items.length) {
+        el.textContent = "未启用定时任务";
+        el.hidden = false;
+        el.classList.add("warn");
+        el.classList.remove("ok");
+        return;
+      }
+      const t = items[0];
+      el.textContent = `已启用 · 下次运行：${t.next_run || "未知"} · 上次：${t.last_run || "-"}`;
+      el.hidden = false;
+      el.classList.remove("warn");
+      el.classList.add("ok");
+    } catch (e) {
+      el.textContent = "读取定时状态失败：" + e.message;
+      el.hidden = false;
+      el.classList.add("warn");
+    }
+  }
+
+  $("#btnScheduleSave")?.addEventListener("click", async () => {
+    const time = $("#scheduleTime")?.value || "03:00";
+    const el = $("#scheduleStatus");
+    if (el) {
+      el.hidden = false;
+      el.textContent = "正在写入系统计划…";
+      el.classList.remove("ok", "warn");
+    }
+    try {
+      const r = await api("/api/scheduler/install", { time });
+      if (r.ok === false) throw new Error(r.error || "安装失败");
+      toast(`已启用每天 ${time} 自动运行`);
+      refreshSchedule();
+    } catch (e) {
+      if (el) {
+        el.textContent = "启用失败：" + e.message;
+        el.classList.add("warn");
+      }
+      toast("启用失败：" + e.message, 3600);
+    }
+  });
+
+  $("#btnScheduleOff")?.addEventListener("click", async () => {
+    try {
+      await api("/api/scheduler/uninstall", {});
+      toast("已关闭定时任务");
+      refreshSchedule();
+    } catch (e) {
+      toast("关闭失败：" + e.message, 3600);
+    }
+  });
+
   // ── pool ───────────────────────────────────────
   $("#btnImportPool").addEventListener("click", async () => {
     const text = $("#poolInput").value;
