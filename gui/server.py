@@ -58,14 +58,23 @@ def load_env() -> dict[str, str]:
 def save_env(values: dict[str, str]) -> None:
     merged = load_env()
     for k, v in values.items():
-        if v:
+        # allow explicit empty clear only for secrets via key names ending in _CLEAR
+        if v or k.startswith("SET_"):
             merged[k] = v
-    lines = [
-        "# NodeBench local secrets — never commit",
-        f"GITHUB_TOKEN={merged.get('GITHUB_TOKEN', '')}",
-        f"ABUSEIPDB_KEY={merged.get('ABUSEIPDB_KEY', '')}",
-        f"IPINFO_TOKEN={merged.get('IPINFO_TOKEN', '')}",
+    order = [
+        "GITHUB_TOKEN",
+        "ABUSEIPDB_KEY",
+        "IPINFO_TOKEN",
+        "GITHUB_LOGIN",
+        "GITHUB_REPO",
     ]
+    lines = ["# NodeBench local secrets — never commit"]
+    for key in order:
+        lines.append(f"{key}={merged.get(key, '')}")
+    # keep any other keys we didn't anticipate
+    for key, val in merged.items():
+        if key not in order and not key.startswith("#"):
+            lines.append(f"{key}={val}")
     ENV_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -118,19 +127,10 @@ def repo_raw_urls(name: str, login: str | None = None) -> dict:
 
 def save_repo_state(login: str, repo: str) -> None:
     """Persist login/repo so raw URLs can be assembled without another API call."""
-    ENV_PATH.parent.mkdir(parents=True, exist_ok=True)
-    env = load_env()
-    env["GITHUB_LOGIN"] = login
-    env["GITHUB_REPO"] = repo
-    lines = [
-        "# NodeBench local secrets — never commit",
-        f"GITHUB_TOKEN={env.get('GITHUB_TOKEN', '')}",
-        f"ABUSEIPDB_KEY={env.get('ABUSEIPDB_KEY', '')}",
-        f"IPINFO_TOKEN={env.get('IPINFO_TOKEN', '')}",
-        f"GITHUB_LOGIN={env.get('GITHUB_LOGIN', '')}",
-        f"GITHUB_REPO={env.get('GITHUB_REPO', '')}",
-    ]
-    ENV_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    values: dict[str, str] = {"GITHUB_LOGIN": login}
+    if repo:
+        values["GITHUB_REPO"] = repo
+    save_env(values)
 
 
 def current_publish_urls() -> dict:

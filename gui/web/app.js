@@ -413,14 +413,36 @@
     $("#wizBody").innerHTML = w.html;
     $("#wizNext").textContent = w.btn;
     $("#wizBar").style.width = ((wizStep + 1) / WIZ.length) * 100 + "%";
+    // prev only after first screen
+    $("#wizPrev").style.visibility = wizStep === 0 ? "hidden" : "visible";
+
     if (wizStep === 1) {
+      // prefill existing token
+      api("/api/status").then((s) => {
+        const el = $("#wizGithub");
+        if (el && s.keys && s.keys.GITHUB_TOKEN && !el.value) {
+          el.value = s.keys.GITHUB_TOKEN;
+        }
+        if (s.github_login) {
+          $("#wizAuthOut").textContent = `✓ 已登录：${s.github_login}`;
+        }
+      }).catch(() => {});
       $("#wizAuth")?.addEventListener("click", onWizAuth);
     }
     if (wizStep === 2) {
       $("#wizCreateRepo").addEventListener("click", onWizRepo);
+      // show login state so user knows if auth stuck
+      api("/api/status").then((s) => {
+        const out = $("#wizRepoOut");
+        if (!out) return;
+        if (s.github_login) {
+          out.textContent = `当前登录：${s.github_login}`;
+        } else {
+          out.textContent = "⚠ 尚未登录 GitHub — 请返回上一步完成认证";
+        }
+      }).catch(() => {});
     }
     if (wizStep === 4) {
-      // fill URLs from last known state
       api("/api/status").then((s) => {
         if (s.publish_addapi) $("#wizUrl").textContent = s.publish_addapi;
         if (s.publish_addcsv) $("#wizUrlCsv").textContent = s.publish_addcsv;
@@ -431,13 +453,19 @@
   async function onWizAuth() {
     const out = $("#wizAuthOut");
     const token = $("#wizGithub").value.trim();
+    if (!token) {
+      out.textContent = "请先粘贴 GitHub Token";
+      return null;
+    }
     out.textContent = "认证中…";
     try {
       const r = await api("/api/github/whoami", { GITHUB_TOKEN: token });
       out.textContent = `✓ 已登录：${r.login}\n${r.addapi}`;
       toast("GitHub 认证成功");
+      return r;
     } catch (e) {
-      out.textContent = e.message;
+      out.textContent = "✗ " + e.message;
+      return null;
     }
   }
 
@@ -460,7 +488,20 @@
     loadKeys();
   }
 
-  $("#wizNext").addEventListener("click", async () => {
+  async function goWizNext() {
+    // Leaving GitHub auth step: always authenticate with whatever token is there.
+    if (wizStep === 1) {
+      const token = $("#wizGithub")?.value.trim() || "";
+      if (token) {
+        await onWizAuth();
+      }
+      // re-check after auth
+      const st = await api("/api/status").catch(() => null);
+      if (st && st.keys && st.keys.GITHUB_TOKEN && !st.github_login) {
+        // token saved but login not resolved — try once more silently
+        await api("/api/github/whoami", { GITHUB_TOKEN: token }).catch(() => {});
+      }
+    }
     if (wizStep === 3) {
       try {
         const token = $("#wizGithub")?.value.trim() || "";
@@ -481,11 +522,19 @@
     }
     wizStep += 1;
     renderWiz();
-  });
+  }
 
-  $("#wizSkip").addEventListener("click", () => {
-    $("#wizard").hidden = true;
+  function goWizPrev() {
+    if (wizStep <= 0) return;
+    wizStep -= 1;
+    renderWiz();
+  }
+
+  $("#wizNext").addEventListener("click", () => {
+    goWizNext().catch((e) => toast(e.message));
   });
+  $("#wizPrev").addEventListener("click", goWizPrev);
+  // no skip: wizard must be completed
 
   // ── theme ──────────────────────────────────────
   function applyTheme(t) {
