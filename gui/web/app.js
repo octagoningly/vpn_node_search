@@ -174,14 +174,30 @@
       order.forEach((k, i) => {
         const li = $(`#runSteps li[data-step="${k}"]`);
         if (!li) return;
-        li.classList.remove("done", "running");
+        li.classList.remove("done", "running", "fail");
         if (s.stage_index > i) li.classList.add("done");
-        else if (s.stage_index === i) li.classList.add("running");
+        else if (s.stage_index === i) li.classList.add(s.running ? "running" : "done");
       });
+      // publish step honest status once finished
       if (!s.running) {
+        const pub = $('#runSteps li[data-step="publish"]');
+        if (pub) {
+          pub.classList.remove("done", "running", "fail");
+          if (s.published) pub.classList.add("done");
+          else if (s.ranked > 0) pub.classList.add("fail");
+          // 0 ranked → leave neutral
+        }
         $("#btnRun").disabled = false;
         $("#btnRun").textContent = "开始运行";
-        toast(s.ok ? "运行完成" : "运行结束（退出码 " + s.code + "）");
+        const banner = $("#runSummary");
+        if (banner) {
+          const msg = s.summary || (s.ok ? "运行完成" : "运行结束（退出码 " + s.code + "）");
+          banner.textContent = msg;
+          banner.hidden = false;
+          banner.classList.toggle("warn", !s.published);
+          banner.classList.toggle("ok", !!s.published);
+        }
+        toast(s.summary || (s.ok ? "运行完成" : "运行结束（退出码 " + s.code + "）"), 3600);
         loadResult();
         return;
       }
@@ -295,11 +311,13 @@
         if (r.note) {
           note.textContent = r.note;
           note.hidden = false;
-          note.classList.toggle("warn", !r.published);
+          note.classList.toggle("warn", !r.published || !!r.stale);
+          note.classList.toggle("ok", !!r.published && !r.stale);
         } else if (r.published) {
           note.textContent = "已发布到 output/latest";
           note.hidden = false;
           note.classList.remove("warn");
+          note.classList.add("ok");
         } else {
           note.hidden = true;
         }

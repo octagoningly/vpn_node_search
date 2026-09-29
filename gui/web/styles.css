@@ -520,6 +520,14 @@ input[type="range"]::-webkit-slider-thumb {
   box-shadow: 0 0 0 4px var(--accent-soft);
 }
 
+.steps li.fail { color: #b45309; }
+.steps li.fail .step-dot {
+  background: #f59e0b;
+  border-color: #f59e0b;
+}
+
+[data-theme="dark"] .steps li.fail { color: #fbbf24; }
+
 /* ── Code / log ──────────────────────────────────── */
 .code-block, .preview {
   font-family: var(--mono);
@@ -604,10 +612,22 @@ input[type="range"]::-webkit-slider-thumb {
   border-color: #fde68a;
 }
 
+.result-note.ok {
+  color: #065f46;
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+}
+
 [data-theme="dark"] .result-note.warn {
   color: #fcd34d;
   background: #3b2f14;
   border-color: #78560d;
+}
+
+[data-theme="dark"] .result-note.ok {
+  color: #6ee7b7;
+  background: #14352a;
+  border-color: #2f6b54;
 }
 
 .badge {

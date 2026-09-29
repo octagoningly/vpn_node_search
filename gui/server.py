@@ -15,6 +15,7 @@ import threading
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -40,6 +41,11 @@ _state = {
     "ok": False,
     "code": None,
     "stage_index": -1,
+    "summary": "",
+    "ranked": 0,
+    "published": False,
+    "publish_error": "",
+    "run_id": "",
 }
 
 
@@ -202,12 +208,134 @@ def set_autostart(enable: bool) -> None:
 
 
 # ── run worker ──────────────────────────────────────────────────────────
+def _newest_run_dir() -> Path | None:
+    base = _output_base()
+    if not base.is_dir():
+        return None
+    runs = [
+        p
+        for p in base.iterdir()
+        if p.is_dir() and re.match(r"^\d{8}T\d{6}Z-", p.name)
+    ]
+    if not runs:
+        return None
+    return sorted(runs, key=lambda p: p.name)[-1]
+
+
+def _read_run_report(run_dir: Path) -> dict:
+    for name in ("run-report.json", "export/report.json", "report.json"):
+        path = run_dir / name
+        if path.is_file():
+            try:
+                return json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+    return {}
+
+
+def _report_ranked(report: dict) -> int:
+    stages = report.get("stages") or {}
+    score = stages.get("score") or {}
+    counts = score.get("counts") or {}
+    return int(counts.get("ranked") or 0)
+
+
+def _report_probe_usable(report: dict) -> int:
+    probe = report.get("probe") or {}
+    total = 0
+    for node in probe.values():
+        if isinstance(node, dict):
+            total += int(node.get("usable_real") or 0)
+    return total
+
+
+def push_public_branch() -> tuple[bool, str]:
+    """Force-push cf-addapi/cf-addcsv to the user's GitHub public branch."""
+    env = load_env()
+    token = (env.get("GITHUB_TOKEN") or os.environ.get("GITHUB_TOKEN") or "").strip()
+    login = (env.get("GITHUB_LOGIN") or "").strip()
+    repo = (env.get("GITHUB_REPO") or "").strip()
+    if token and not login:
+        try:
+            user = gh_api("/user")
+            login = str(user.get("login") or "").strip()
+        except Exception:  # noqa: BLE001
+            login = ""
+    if token and login and not repo:
+        # Prefer a previously known name, else first public repo.
+        try:
+            repos = gh_api("/user/repos?per_page=100&sort=updated")
+            names = [str(r.get("name") or "") for r in repos if isinstance(r, dict)]
+            repo = next((n for n in names if n == "cf-ip-pool"), names[0] if names else "")
+        except Exception:  # noqa: BLE001
+            repo = ""
+    if login and repo:
+        save_repo_state(login, repo)
+    if not token or not login or not repo:
+        return False, "缺少 GITHUB_TOKEN / GITHUB_LOGIN / GITHUB_REPO（请在密钥页重新认证）"
+    src = _output_base() / "latest"
+    files = ["cf-addapi.txt", "cf-addcsv.csv"]
+    present = [f for f in files if (src / f).is_file() and (src / f).stat().st_size > 0]
+    if not present:
+        return False, "latest 目录没有可发布的 cf-addapi/cf-addcsv"
+    work = _output_base() / "_public_branch"
+    try:
+        if work.exists():
+            import shutil
+
+            shutil.rmtree(work, ignore_errors=True)
+        work.mkdir(parents=True, exist_ok=True)
+        for name in present:
+            (work / name).write_bytes((src / name).read_bytes())
+        (work / "README.md").write_text(
+            f"# {repo}\n\nAuto-published by NodeBench. Do not edit by hand.\n",
+            encoding="utf-8",
+        )
+        git = ["git", "-C", str(work)]
+        auth_url = f"https://x-access-token:{token}@github.com/{login}/{repo}.git"
+        cmds = [
+            git + ["init", "-b", "public"],
+            git + ["config", "user.email", "nodebench@local"],
+            git + ["config", "user.name", "nodebench-publish"],
+            git + ["add", "-A"],
+            git + ["commit", "-m", f"publish: nodebench {datetime.now().strftime('%Y-%m-%d %H:%M')}"],
+            git + ["remote", "add", "origin", auth_url],
+            git + ["push", "-u", "origin", "public", "--force"],
+        ]
+        for cmd in cmds:
+            proc = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                shell=(os.name == "nt" and cmd[0] == "git"),
+            )
+            if proc.returncode != 0:
+                err = (proc.stderr or proc.stdout or "").strip()[-400:]
+                return False, f"git {cmd[1]} 失败: {err}"
+        return True, f"https://raw.githubusercontent.com/{login}/{repo}/public/cf-addapi.txt"
+    except Exception as exc:  # noqa: BLE001
+        return False, str(exc)
+
+
 def run_worker() -> None:
-    _state.update(running=True, log="启动 nodebench run --profile auto-collect…\n", stage_index=0)
+    _state.update(
+        running=True,
+        log="启动 nodebench run --profile auto-collect…\n",
+        stage_index=0,
+        summary="",
+        ranked=0,
+        published=False,
+        publish_error="",
+        run_id="",
+        ok=False,
+        code=None,
+    )
     try:
         proc = subprocess.run(
             ["uv", "run", "nodebench", "run", "--profile", "auto-collect"],
-            cwd=ROOT,
+            cwd=_project_root(),
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -217,19 +345,72 @@ def run_worker() -> None:
         out = (proc.stdout or "") + (proc.stderr or "")
         _state["log"] += out[-12000:]
         _state["code"] = proc.returncode
-        _state["ok"] = proc.returncode == 0
-        _state["stage_index"] = 4 if proc.returncode == 0 else 2
+
+        _state["stage_index"] = 1
+        _state["log"] += "\n—— 解析运行结果 ——\n"
+        run_dir = _newest_run_dir()
+        report = _read_run_report(run_dir) if run_dir else {}
+        ranked = _report_ranked(report)
+        usable = _report_probe_usable(report)
+        run_id = str(report.get("run_id") or (run_dir.name if run_dir else ""))
+        _state["run_id"] = run_id
+        _state["ranked"] = ranked
+        _state["stage_index"] = 2
+
+        if ranked > 0:
+            _state["log"] += f"入榜 {ranked} 条，准备发布到 public 分支…\n"
+            _state["stage_index"] = 3
+            ok_pub, msg = push_public_branch()
+            _state["published"] = ok_pub
+            if ok_pub:
+                _state["log"] += f"✓ 已发布：{msg}\n"
+                _state["summary"] = f"本轮入榜 {ranked} 条，已发布到 public 分支"
+                _state["stage_index"] = 4
+                _state["ok"] = True
+            else:
+                _state["publish_error"] = msg
+                _state["log"] += f"✗ 发布失败：{msg}\n"
+                _state["summary"] = f"本轮入榜 {ranked} 条，但发布失败：{msg}"
+                _state["ok"] = False
+        else:
+            reason = "测速无可用节点" if usable == 0 else f"实测可用 {usable} 条但均未过筛选"
+            _state["log"] += f"本轮 0 入榜（{reason}），无可发布内容\n"
+            _state["summary"] = f"本轮 0 入榜（{reason}），未发布"
+            _state["stage_index"] = 3
+            _state["ok"] = False
+            if proc.returncode != 0:
+                _state["log"] += f"nodebench 退出码 {proc.returncode}（探测失败/部分完成属正常）\n"
     except Exception as exc:  # noqa: BLE001
         _state["log"] += f"\n启动失败: {exc}\n"
         _state["code"] = -1
         _state["ok"] = False
+        _state["summary"] = f"运行失败：{exc}"
     finally:
         _state["running"] = False
 
 
 # ── results ─────────────────────────────────────────────────────────────
+def _project_root() -> Path:
+    """Root where nodebench writes ``output/`` (differs from GUI ROOT when frozen).
+
+    The frozen exe lives under dist/NodeBench, but the CLI resolves output
+    against the real project (the directory with config/default.yaml).
+    """
+    if (ROOT / "config" / "default.yaml").is_file():
+        return ROOT
+    for cand in (ROOT, *ROOT.parents):
+        if (cand / "config" / "default.yaml").is_file():
+            return cand
+        if (cand / "pyproject.toml").is_file() and (cand / "src" / "nodebench").is_dir():
+            return cand
+    for cand in (Path.cwd(), *Path.cwd().parents):
+        if (cand / "config" / "default.yaml").is_file():
+            return cand
+    return ROOT
+
+
 def _output_base() -> Path:
-    return ROOT / "output"
+    return _project_root() / "output"
 
 
 def _read_addapi_lines(path: Path) -> list[dict]:
@@ -291,26 +472,23 @@ def _load_score_index(scored_path: Path) -> dict[tuple[str, str], dict]:
     return index
 
 
-def _newest_run_dir() -> Path | None:
+def _all_run_dirs() -> list[Path]:
     base = _output_base()
     if not base.is_dir():
-        return None
+        return []
     runs = [
         p
         for p in base.iterdir()
         if p.is_dir() and re.match(r"^\d{8}T\d{6}Z-", p.name)
     ]
-    if not runs:
-        return None
-    return sorted(runs, key=lambda p: p.name)[-1]
+    return sorted(runs, key=lambda p: p.name, reverse=True)
 
 
 def load_results() -> dict:
-    """Best available results: published latest, else newest run export.
+    """Best available results: published latest, else newest non-empty run.
 
-    The publish gate may keep cf-addapi.txt out of output/latest (license /
-    empty content), but the private run export still has the final ranking
-    the user just measured — the results page must show that.
+    Walk back through runs so a 0-入榜 round does not hide the previous
+    good measurement — the user still needs to see what they can paste.
     """
     latest = _output_base() / "latest" / "cf-addapi.txt"
     latest_items = _read_addapi_lines(latest)
@@ -327,34 +505,46 @@ def load_results() -> dict:
             "published": True,
             "note": "",
             "count": len(items),
+            "stale": False,
         }
 
-    run_dir = _newest_run_dir()
-    if run_dir is not None:
+    for run_dir in _all_run_dirs():
         exp = run_dir / "export" / "cf-addapi.txt"
         items = _read_addapi_lines(exp)
         if items:
             scored = _load_score_index(run_dir / "scored.json")
             items = _merge_scores(items, scored)
+            newest = _newest_run_dir()
+            is_latest_run = newest is not None and newest.name == run_dir.name
+            if is_latest_run:
+                note = "来自最近一次运行的导出（未发布到 latest）"
+                stale = False
+            else:
+                note = f"本轮无入榜结果 — 显示 {run_dir.name} 的上次有效数据"
+                stale = True
             return {
                 "items": items,
                 "source": run_dir.name,
                 "published": False,
-                "note": (
-                    "来自最近一次运行的导出（发布门槛未放到 latest，"
-                    "不影响查看与手动使用）"
-                ),
+                "note": note,
                 "count": len(items),
+                "stale": stale,
             }
-        # Fallback: ranked items straight from scored.json (export empty).
         scored_items = _scored_to_rows(_load_score_index(run_dir / "scored.json"), run_dir)
         if scored_items:
+            newest = _newest_run_dir()
+            is_latest_run = newest is not None and newest.name == run_dir.name
             return {
                 "items": scored_items,
                 "source": run_dir.name,
                 "published": False,
-                "note": "来自最近一次运行的评分结果（导出文件为空）",
+                "note": (
+                    "来自最近一次运行的评分结果（导出文件为空）"
+                    if is_latest_run
+                    else f"本轮无入榜结果 — 显示 {run_dir.name} 的上次有效数据"
+                ),
                 "count": len(scored_items),
+                "stale": not is_latest_run,
             }
 
     return {
@@ -363,6 +553,7 @@ def load_results() -> dict:
         "published": False,
         "note": "还没有测速结果 — 点「开始运行」跑一轮即可看到入榜节点",
         "count": 0,
+        "stale": False,
     }
 
 
