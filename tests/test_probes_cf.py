@@ -256,6 +256,74 @@ def test_default_cfst_runner_reads_csv_file(tmp_path: Path):
         monkey.undo()
 
 
+def test_default_cfst_runner_keeps_csv_on_nonzero_exit(tmp_path: Path):
+    """A dirty CFST exit must not discard the table it already wrote."""
+    csv_path = tmp_path / "result.csv"
+    csv_path.write_text(CSV_TEXT, encoding="utf-8")
+    command = ["cfst", "-o", str(csv_path)]
+
+    class FakeCompleted:
+        returncode = 2
+        stdout = "banner\n"
+        stderr = "warn"
+
+    monkey = pytest.MonkeyPatch()
+    try:
+        monkey.setattr(
+            "nodebench.probes.cfst.subprocess.run",
+            lambda *args, **kwargs: FakeCompleted(),
+        )
+        assert default_cfst_runner(command, 5.0) == CSV_TEXT
+    finally:
+        monkey.undo()
+
+
+def test_default_cfst_runner_keeps_csv_on_timeout(tmp_path: Path):
+    import subprocess as sp
+
+    csv_path = tmp_path / "result.csv"
+    csv_path.write_text(CSV_TEXT, encoding="utf-8")
+    command = ["cfst", "-o", str(csv_path)]
+
+    def boom(*_args, **_kwargs):
+        raise sp.TimeoutExpired(cmd="cfst", timeout=5)
+
+    monkey = pytest.MonkeyPatch()
+    try:
+        monkey.setattr("nodebench.probes.cfst.subprocess.run", boom)
+        assert default_cfst_runner(command, 5.0) == CSV_TEXT
+    finally:
+        monkey.undo()
+
+
+def test_collect_metrics_survives_one_port_failure(tmp_path: Path):
+    """Port 80 blowing up must not discard port 443's measured rows."""
+    good_csv = (
+        f"{CSV_HEADER}\n"
+        "192.0.2.1,4,4,0.0,23.5,28.64,HKG\n"
+    )
+
+    def flaky_runner(command, timeout) -> str:
+        text = " ".join(command)
+        if "-tp 80" in text:
+            raise ProbeError(
+                code="probe_error", message="cfst-80 exploded", retryable=True
+            )
+        out = Path(command[command.index("-o") + 1])
+        out.write_text(good_csv, encoding="utf-8")
+        return good_csv
+
+    prober = make_prober(
+        tmp_path, binary="fake-cfst", check=passing_check, runner=flaky_runner
+    )
+    prober.collect_metrics([sample_target(port=80), sample_target(port=443)])
+    assert prober.lookup_metric(sample_target(port=443)) is not None
+    assert prober.lookup_metric(sample_target(port=80)) is None
+    result = prober.probe(sample_target(port=443))
+    assert result.status is ProbeStatus.OK
+    assert result.speed_mb_s == 28.64
+
+
 def test_metrics_failure_downgrades_ok(tmp_path: Path):
     def bad_runner(command, timeout) -> str:
         raise ProbeError(

@@ -446,8 +446,21 @@ def _option_value(command: Sequence[str], flag: str) -> str:
 
 
 def default_cfst_runner(command: Sequence[str], timeout: float) -> str:
-    """Run CloudflareSpeedTest and return the result table it wrote."""
+    """Run CloudflareSpeedTest and return the result table it wrote.
+
+    A non-zero exit or timeout must not throw away a result file CFST
+    already flushed — the table is the product, the exit code is not.
+    """
     csv_path = _option_value(command, "-o")
+
+    def _csv_text() -> str:
+        if not csv_path:
+            return ""
+        path = Path(csv_path)
+        if path.is_file() and path.stat().st_size > 0:
+            return path.read_text(encoding="utf-8", errors="replace")
+        return ""
+
     try:
         completed = subprocess.run(
             list(command),
@@ -459,6 +472,10 @@ def default_cfst_runner(command: Sequence[str], timeout: float) -> str:
             timeout=max(1.0, float(timeout)),
         )
     except subprocess.TimeoutExpired as err:
+        # CFST writes the table as it goes; keep whatever landed on disk.
+        partial = _csv_text()
+        if partial.strip():
+            return partial
         raise ProbeTimeout(
             f"cfst exceeded {float(timeout):.1f}s", stage=FailureStage.DOWNLOAD.value
         ) from err
@@ -469,7 +486,10 @@ def default_cfst_runner(command: Sequence[str], timeout: float) -> str:
             retryable=False,
         ) from err
     stdout = completed.stdout or ""
+    table = _csv_text()
     if completed.returncode:
+        if table.strip():
+            return table
         detail = (completed.stderr or stdout or "").strip()[:400]
         raise ProbeError(
             code="probe_error",
@@ -477,12 +497,9 @@ def default_cfst_runner(command: Sequence[str], timeout: float) -> str:
             retryable=True,
         )
     if csv_path:
-        path = Path(csv_path)
-        if path.is_file():
-            return path.read_text(encoding="utf-8", errors="replace")
         # CFST skips writing the result file when no IP passed the filters;
         # banner text on stdout is not a CSV table.
-        return ""
+        return table
     return stdout
 
 
@@ -643,21 +660,27 @@ class CfstProber:
         groups: dict[int, list[EndpointTarget]] = {}
         for target in targets:
             groups.setdefault(int(target.port), []).append(target)
+        errors: list[BaseException] = []
         for port, group in sorted(groups.items()):
             try:
                 rows = self._run_cfst(group, port)
             except ProbeError as err:
-                self._metrics_error = err
-                return
+                # One port failing must not discard another port's table.
+                errors.append(err)
+                continue
             except OSError as err:
-                self._metrics_error = ProbeError(
-                    code="probe_error",
-                    message=f"cfst failed: {err}",
-                    retryable=False,
+                errors.append(
+                    ProbeError(
+                        code="probe_error",
+                        message=f"cfst failed: {err}",
+                        retryable=False,
+                    )
                 )
-                return
+                continue
             for row in rows:
                 self._metrics[(row.ip, port)] = row
+        if errors and not self._metrics:
+            self._metrics_error = errors[0]
 
     def _resolve_target_ip(self, target: EndpointTarget) -> str | None:
         """Return a literal IP for CFST input; resolve hostnames once (bounded)."""
@@ -703,7 +726,13 @@ class CfstProber:
         ip_file = self.run_dir / f"cfst-{port}.ips.txt"
         csv_file = self.run_dir / f"cfst-{port}.result.csv"
         ip_file.write_text("\n".join(ips) + "\n", encoding="utf-8")
-        download_nodes = max(1, min(int(self.budget.max_download_nodes), len(ips)))
+        # Each download sample may take ~10s; shrink -dn to the time left
+        # so one port cannot starve the rest of the deadline.
+        remaining = max(1.0, float(self.budget.remaining_time))
+        time_budget_nodes = max(1, int(remaining // 12))
+        download_nodes = max(
+            1, min(int(self.budget.max_download_nodes), len(ips), time_budget_nodes)
+        )
         threads = min(MAX_LATENCY_THREADS, max(1, len(ips)))
         command = [
             str(self.binary),
@@ -717,8 +746,8 @@ class CfstProber:
             str(download_nodes),
             "-n",
             str(threads),
-            "-p",
-            "0",
+            "-t",
+            "2",
         ]
         if self.speedtest_url:
             command += ["-url", self.speedtest_url]
@@ -742,9 +771,6 @@ class CfstProber:
             notes["http_status"] = int(check.http_status)
 
         status, stage, code, message, attempts, timeouts = self._outcome(check)
-        if status is ProbeStatus.OK and self._metrics_error is not None:
-            status, stage, code, message, timeouts = self._metrics_outcome()
-            notes["metrics_error"] = True
         row = self._metrics.get((normalize_ip(target.address), int(target.port)))
         if row is None:
             ip = self._resolved_ips.get(
@@ -752,6 +778,11 @@ class CfstProber:
             ) or self._resolve_target_ip(target)
             if ip:
                 row = self._metrics.get((ip, int(target.port)))
+        # Only demote when THIS target has no usable metrics — a failed
+        # sibling port must not poison targets CFST already measured.
+        if status is ProbeStatus.OK and row is None and self._metrics_error is not None:
+            status, stage, code, message, timeouts = self._metrics_outcome()
+            notes["metrics_error"] = True
         if status is ProbeStatus.OK and row is None:
             notes["metrics_missing"] = True
 
