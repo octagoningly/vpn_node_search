@@ -581,6 +581,35 @@ input[type="range"]::-webkit-slider-thumb {
 .table tr:last-child td { border-bottom: 0; }
 .table tbody tr:hover { background: var(--bg); }
 
+.empty-cell {
+  text-align: center;
+  color: var(--faint);
+  padding: 28px 12px !important;
+  font-size: 13px;
+}
+
+.result-note {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  color: var(--muted);
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+
+.result-note.warn {
+  color: #92400e;
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+[data-theme="dark"] .result-note.warn {
+  color: #fcd34d;
+  background: #3b2f14;
+  border-color: #78560d;
+}
+
 .badge {
   display: inline-flex;
   padding: 2px 8px;

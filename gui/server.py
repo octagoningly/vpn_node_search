@@ -228,12 +228,15 @@ def run_worker() -> None:
 
 
 # ── results ─────────────────────────────────────────────────────────────
-def load_results() -> list[dict]:
-    exp = ROOT / "output" / "latest" / "cf-addapi.txt"
-    if not exp.is_file():
+def _output_base() -> Path:
+    return ROOT / "output"
+
+
+def _read_addapi_lines(path: Path) -> list[dict]:
+    if not path.is_file():
         return []
-    items = []
-    for line in exp.read_text(encoding="utf-8").splitlines():
+    items: list[dict] = []
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
         line = line.strip()
         if not line:
             continue
@@ -249,9 +252,173 @@ def load_results() -> list[dict]:
                 "stability": parts[2] if len(parts) > 2 else "",
                 "country": parts[3] if len(parts) > 3 else "",
                 "score": "",
+                "remark": remark,
             }
         )
     return items
+
+
+def _load_score_index(scored_path: Path) -> dict[tuple[str, str], dict]:
+    """Map (address, port) → ranked metrics from a run's scored.json."""
+    if not scored_path.is_file():
+        return {}
+    try:
+        data = json.loads(scored_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    index: dict[tuple[str, str], dict] = {}
+    for key in ("endpoints", "proxies"):
+        for node in data.get(key) or []:
+            if not isinstance(node, dict) or node.get("status") != "ranked":
+                continue
+            addr = str(node.get("address") or "")
+            port = str(node.get("port") or "")
+            if not addr:
+                continue
+            score = node.get("score")
+            try:
+                score_txt = f"{float(score):.2f}" if score is not None else ""
+            except (TypeError, ValueError):
+                score_txt = ""
+            index[(addr, port)] = {
+                "score": score_txt,
+                "speed": node.get("speed_mb_s"),
+                "latency": node.get("latency_ms"),
+                "loss": node.get("loss_pct"),
+                "availability": node.get("availability_rate"),
+                "rank": node.get("rank"),
+            }
+    return index
+
+
+def _newest_run_dir() -> Path | None:
+    base = _output_base()
+    if not base.is_dir():
+        return None
+    runs = [
+        p
+        for p in base.iterdir()
+        if p.is_dir() and re.match(r"^\d{8}T\d{6}Z-", p.name)
+    ]
+    if not runs:
+        return None
+    return sorted(runs, key=lambda p: p.name)[-1]
+
+
+def load_results() -> dict:
+    """Best available results: published latest, else newest run export.
+
+    The publish gate may keep cf-addapi.txt out of output/latest (license /
+    empty content), but the private run export still has the final ranking
+    the user just measured — the results page must show that.
+    """
+    latest = _output_base() / "latest" / "cf-addapi.txt"
+    latest_items = _read_addapi_lines(latest)
+    if latest_items:
+        scored = _load_score_index(_output_base() / "latest" / "scored.json")
+        if not scored:
+            run_dir = _newest_run_dir()
+            if run_dir is not None:
+                scored = _load_score_index(run_dir / "scored.json")
+        items = _merge_scores(latest_items, scored)
+        return {
+            "items": items,
+            "source": "output/latest",
+            "published": True,
+            "note": "",
+            "count": len(items),
+        }
+
+    run_dir = _newest_run_dir()
+    if run_dir is not None:
+        exp = run_dir / "export" / "cf-addapi.txt"
+        items = _read_addapi_lines(exp)
+        if items:
+            scored = _load_score_index(run_dir / "scored.json")
+            items = _merge_scores(items, scored)
+            return {
+                "items": items,
+                "source": run_dir.name,
+                "published": False,
+                "note": (
+                    "来自最近一次运行的导出（发布门槛未放到 latest，"
+                    "不影响查看与手动使用）"
+                ),
+                "count": len(items),
+            }
+        # Fallback: ranked items straight from scored.json (export empty).
+        scored_items = _scored_to_rows(_load_score_index(run_dir / "scored.json"), run_dir)
+        if scored_items:
+            return {
+                "items": scored_items,
+                "source": run_dir.name,
+                "published": False,
+                "note": "来自最近一次运行的评分结果（导出文件为空）",
+                "count": len(scored_items),
+            }
+
+    return {
+        "items": [],
+        "source": "",
+        "published": False,
+        "note": "还没有测速结果 — 点「开始运行」跑一轮即可看到入榜节点",
+        "count": 0,
+    }
+
+
+def _merge_scores(items: list[dict], scored: dict[tuple[str, str], dict]) -> list[dict]:
+    out = []
+    for it in items:
+        row = dict(it)
+        meta = scored.get((row["address"], str(row["port"]))) or scored.get(
+            (row["address"], row["port"])
+        )
+        if meta:
+            if not row.get("score"):
+                row["score"] = meta.get("score") or ""
+            if meta.get("rank") is not None:
+                row["rank"] = meta["rank"]
+        out.append(row)
+    return out
+
+
+def _scored_to_rows(
+    scored: dict[tuple[str, str], dict], run_dir: Path
+) -> list[dict]:
+    """Build table rows from scored.json when no addapi export exists."""
+    try:
+        data = json.loads((run_dir / "scored.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    rows: list[dict] = []
+    for key in ("endpoints", "proxies"):
+        for node in data.get(key) or []:
+            if not isinstance(node, dict) or node.get("status") != "ranked":
+                continue
+            score = node.get("score")
+            try:
+                score_txt = f"{float(score):.2f}" if score is not None else ""
+            except (TypeError, ValueError):
+                score_txt = ""
+            speed = node.get("speed_mb_s")
+            purity = node.get("score_breakdown", {}).get("purity") if isinstance(
+                node.get("score_breakdown"), dict
+            ) else None
+            stability = node.get("availability_rate")
+            rows.append(
+                {
+                    "address": str(node.get("address") or ""),
+                    "port": str(node.get("port") or ""),
+                    "speed": f"{speed:.1f}" if isinstance(speed, (int, float)) else "",
+                    "purity": f"{purity:.2f}" if isinstance(purity, (int, float)) else "",
+                    "stability": f"{stability:.2f}" if isinstance(stability, (int, float)) else "",
+                    "country": str(node.get("remarks") or node.get("country_code") or "??"),
+                    "score": score_txt,
+                    "remark": "",
+                }
+            )
+    rows.sort(key=lambda r: (r.get("score") or ""), reverse=True)
+    return rows
 
 
 # ── pool import ─────────────────────────────────────────────────────────
@@ -341,7 +508,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/run/status":
             return self._json(dict(_state))
         if path == "/api/results":
-            return self._json({"items": load_results()})
+            return self._json(load_results())
         self._json({"error": "not found"}, 404)
 
     def do_POST(self) -> None:

@@ -262,12 +262,24 @@ def run_export_stage(
 def _tags_for(
     ranked_items: Sequence[Any], tag_by_source: Mapping[str, str]
 ) -> set[str]:
+    """Effective license tag per ranked item.
+
+    An item seen under several sources takes the best available tag:
+    user-supplied / redistributable beats ``unknown``. Collecting every
+    source tag would let one unknown source block the whole export.
+    """
     tags: set[str] = set()
     for item in ranked_items:
         if getattr(item, "status", "") != "ranked":
             continue
-        for source_id in getattr(item, "source_ids", []) or []:
-            tags.add(tag_by_source.get(str(source_id), "unknown"))
+        item_tags = [
+            tag_by_source.get(str(source_id), "unknown")
+            for source_id in (getattr(item, "source_ids", []) or [])
+        ]
+        if not item_tags:
+            continue
+        preferred = [t for t in item_tags if t and str(t).strip().lower() != "unknown"]
+        tags.add((preferred[0] if preferred else item_tags[0]).strip().lower())
     return tags
 
 

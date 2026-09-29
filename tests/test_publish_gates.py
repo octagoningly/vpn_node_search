@@ -298,3 +298,34 @@ def test_export_manifest_records_user_supplied_cf_candidates(tmp_path: Path):
     authorized_manifest = manifest_of(Path(authorized.directory))
     assert authorized_manifest["cf_candidates_user_supplied"] is True
     assert authorized_manifest["cf_candidates_authorized"] is True
+
+
+def test_tags_for_prefers_redistributable_over_unknown_on_same_item():
+    """A node seen under MIT + unknown must not poison the export gate."""
+    from nodebench.core.stages import _tags_for
+
+    items = [
+        SimpleNamespace(status="ranked", source_ids=["subscriptions", "github"]),
+        SimpleNamespace(status="ranked", source_ids=["github"]),
+    ]
+    tag_by_source = {"subscriptions": "mit", "github": "unknown"}
+    # First item: mit beats unknown. Second item: unknown-only stays unknown.
+    assert _tags_for(items[:1], tag_by_source) == {"mit"}
+    assert _tags_for(items, tag_by_source) == {"mit", "unknown"}
+
+
+def test_mixed_source_endpoint_with_mit_keeps_addapi(tmp_path: Path):
+    """subscriptions(MIT)+github(unknown) items must still publish cf-addapi."""
+    export_dir, target, report, outcome = build_fixture(tmp_path)
+    result = publish(
+        export_dir,
+        target,
+        report,
+        outcome,
+        endpoint_license_tags={"mit"},
+        proxy_license_tags={"mit"},
+    )
+    assert result.status == "ok"
+    assert CF_ADDAPI_NAME in result.files
+    assert CF_ADDCSV_NAME in result.files
+    assert (target / CF_ADDAPI_NAME).is_file()

@@ -286,25 +286,50 @@
 
   // ── result ─────────────────────────────────────
   async function loadResult() {
+    const tb = $("#resultTable tbody");
+    const note = $("#resultNote");
     try {
       const r = await api("/api/results");
       const rows = r.items || [];
-      const tb = $("#resultTable tbody");
+      if (note) {
+        if (r.note) {
+          note.textContent = r.note;
+          note.hidden = false;
+          note.classList.toggle("warn", !r.published);
+        } else if (r.published) {
+          note.textContent = "已发布到 output/latest";
+          note.hidden = false;
+          note.classList.remove("warn");
+        } else {
+          note.hidden = true;
+        }
+      }
+      if (!rows.length) {
+        tb.innerHTML = `<tr><td colspan="7" class="empty-cell">${
+          r.note || "暂无结果 — 点「开始运行」跑一轮即可看到入榜节点"
+        }</td></tr>`;
+        $("#resultStats").innerHTML = `
+          <div class="stat"><div class="stat-n">0</div><div class="stat-l">入榜</div></div>
+          <div class="stat"><div class="stat-n">—</div><div class="stat-l">平均速度 MB/s</div></div>
+          <div class="stat"><div class="stat-n">—</div><div class="stat-l">最快 MB/s</div></div>
+          <div class="stat"><div class="stat-n">—</div><div class="stat-l">国家 / 地区</div></div>`;
+        return;
+      }
       tb.innerHTML = rows
         .map(
           (it, i) =>
             `<tr>
-              <td>${i + 1}</td>
+              <td>${it.rank ?? i + 1}</td>
               <td><code>${it.address}:${it.port}</code></td>
-              <td><b>${it.speed ?? "-"}</b> MB/s</td>
-              <td>${it.purity ?? "-"}</td>
-              <td>${it.stability ?? "-"}</td>
-              <td><span class="badge badge-ok">${it.country ?? "??"}</span></td>
-              <td>${it.score ?? "-"}</td>
+              <td><b>${it.speed || "-"}</b> MB/s</td>
+              <td>${it.purity || "-"}</td>
+              <td>${it.stability || "-"}</td>
+              <td><span class="badge badge-ok">${it.country || "??"}</span></td>
+              <td>${it.score || "-"}</td>
             </tr>`
         )
         .join("");
-      const speeds = rows.map((x) => x.speed).filter((x) => typeof x === "number");
+      const speeds = rows.map((x) => parseFloat(x.speed)).filter((x) => !isNaN(x));
       $("#resultStats").innerHTML = `
         <div class="stat"><div class="stat-n">${rows.length}</div><div class="stat-l">入榜</div></div>
         <div class="stat"><div class="stat-n">${
@@ -314,6 +339,14 @@
         <div class="stat"><div class="stat-n">${new Set(rows.map((x) => x.country)).size || "—"}</div><div class="stat-l">国家 / 地区</div></div>`;
     } catch (e) {
       console.warn(e);
+      if (note) {
+        note.textContent = "加载结果失败：" + e.message;
+        note.hidden = false;
+        note.classList.add("warn");
+      }
+      if (tb) {
+        tb.innerHTML = `<tr><td colspan="7" class="empty-cell">加载失败：${e.message}</td></tr>`;
+      }
     }
   }
 
@@ -638,6 +671,7 @@
 
   // ── boot ───────────────────────────────────────
   loadKeys();
+  loadResult();
   api("/api/autostart-status").then((r) => {
     const el = $("#btnAutostart");
     if (el) el.textContent = r.enabled ? "关闭" : "开启";

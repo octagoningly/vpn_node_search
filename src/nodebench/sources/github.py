@@ -311,6 +311,7 @@ def collect_github(
     token = _resolve_token()
     if secrets:
         token = token or str(secrets.get("github_token") or "").strip()
+    license_tag = (str(config.license_tag or "") or LICENSE_TAG).strip() or LICENSE_TAG
 
     want_offline = bool(config.offline) or offline_requested()
     force_offline = want_offline or not token
@@ -435,7 +436,7 @@ def collect_github(
                 content_type=content_type,
                 payload=text,
                 fetched_at=fetched_at,
-                license_tag=LICENSE_TAG,
+                license_tag=license_tag,
                 source_ref=f"{repo}/{filename}" if repo else filename,
             )
             items.append(item)

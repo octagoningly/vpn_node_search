@@ -36,6 +36,8 @@ sources:
     max_files_per_run: 30
     cache_ttl_hours: 24
     offline: false
+    # allowlisted repos are OSS address lists (WorkerVless2sub / CFcdnVmess2sub / …)
+    license_tag: "MIT"
   cf:
     enabled: true
     candidate_files:

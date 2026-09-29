@@ -69,6 +69,7 @@ class GithubSourceConfig(BaseModel):
     timeout_s: float = 15.0
     user_agent: str = "NodeBench/0.1 (+https://github.com/local/nodebench; bounded-research)"
     offline: bool = False
+    license_tag: str = "unknown"
 
     @field_validator("timeout_s")
     @classmethod
