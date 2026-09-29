@@ -12,6 +12,7 @@ import re
 import subprocess
 import sys
 import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -33,6 +34,7 @@ ENV_PATH = ROOT / ".env"
 CONFIG_PATH = ROOT / "config" / "default.yaml"
 POOL_PATH = ROOT / "candidates" / "user-import.txt"
 PORT = 8765
+_bound: dict = {"port": None, "error": ""}
 
 # run state
 _state = {
@@ -834,8 +836,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"ok": True})
 
             if path == "/api/open-output":
-                out = ROOT / "output"
-                out.mkdir(exist_ok=True)
+                out = _output_base()
+                out.mkdir(parents=True, exist_ok=True)
                 if os.name == "nt":
                     os.startfile(out)  # noqa: S606
                 return self._json({"ok": True})
@@ -857,14 +859,56 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
 
+def start_server(host: str = "127.0.0.1", preferred_port: int = PORT) -> int:
+    """Bind and serve on a free port (preferred_port, then +1…).
+
+    Returns the port actually bound. Raises OSError when none are free —
+    a silent bind failure looks like "connection refused" in the webview.
+    """
+    last_err: Exception | None = None
+    httpd = None
+    port = preferred_port
+    for candidate in range(preferred_port, preferred_port + 30):
+        try:
+            httpd = ThreadingHTTPServer((host, candidate), Handler)
+            port = candidate
+            break
+        except OSError as exc:
+            last_err = exc
+            continue
+    if httpd is None:
+        _bound["error"] = str(last_err or "no free port")
+        raise OSError(f"无法绑定本地端口 {preferred_port}+：{last_err}")
+    _bound["port"] = port
+    _bound["error"] = ""
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    return port
+
+
+def wait_ready(host: str = "127.0.0.1", port: int = PORT, timeout_s: float = 5.0) -> bool:
+    """Poll until the local HTTP server answers, or timeout."""
+    import socket
+    import time
+
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        try:
+            with socket.create_connection((host, port), timeout=0.3):
+                return True
+        except OSError:
+            time.sleep(0.1)
+    return False
+
+
 def main(open_browser: bool = True) -> int:
-    server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
-    url = f"http://127.0.0.1:{PORT}"
+    port = start_server()
+    url = f"http://127.0.0.1:{port}"
     print(f"NodeBench UI → {url}")
     if open_browser:
         threading.Timer(0.4, lambda: __import__("webbrowser").open(url)).start()
     try:
-        server.serve_forever()
+        while True:
+            time.sleep(3600)
     except KeyboardInterrupt:
         pass
     return 0

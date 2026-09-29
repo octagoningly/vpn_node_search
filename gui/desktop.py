@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import sys
 import threading
-import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -35,8 +34,25 @@ def main() -> int:
 
     import server
 
-    threading.Thread(target=lambda: server.main(open_browser=False), daemon=True).start()
-    time.sleep(0.6)
+    try:
+        port = server.start_server()
+    except OSError as exc:
+        # Silent bind failure becomes ERR_CONNECTION_REFUSED in the webview.
+        webview.create_window(
+            title="NodeBench · 启动失败",
+            html=(
+                "<h2 style='font-family:sans-serif'>本地服务启动失败</h2>"
+                f"<p style='font-family:sans-serif'>{exc}</p>"
+                "<p style='font-family:sans-serif'>请检查是否有程序占用端口，"
+                "或改用其它端口后重试。</p>"
+            ),
+            width=560,
+            height=320,
+        )
+        webview.start()
+        return 1
+    server.wait_ready(port=port)
+    url = f"http://127.0.0.1:{port}"
 
     state = {"hidden": False}
 
@@ -50,7 +66,7 @@ def main() -> int:
 
     window = webview.create_window(
         title="NodeBench · 优选节点",
-        url="http://127.0.0.1:8765",
+        url=url,
         width=1180,
         height=760,
         min_size=(960, 620),
