@@ -16,6 +16,11 @@ sources:
       - https://raw.githubusercontent.com/cmliu/WorkerVless2sub/main/addressesipv6api.txt
       # CF 优选 IP 公开清单
       - https://raw.githubusercontent.com/cmliu/CFcdnVmess2sub/main/addressesapi.txt
+      - https://raw.githubusercontent.com/cmliu/CFcdnVmess2sub/main/addressescsv.csv
+      - https://raw.githubusercontent.com/cmliu/CFcdnVmess2sub/main/addressesipv6api.txt
+      # edgetunnel 相关公开优选清单
+      - https://raw.githubusercontent.com/cmliu/edgetunnel/main/addressesapi.txt
+      - https://raw.githubusercontent.com/cmliu/edgetunnel/main/addressescsv.csv
     timeout_s: 20
     license_tag: "MIT"
     offline: false
@@ -23,6 +28,7 @@ sources:
     enabled: true
     allowed_repositories:
       - cmliu/WorkerVless2sub
+      - cmliu/CFcdnVmess2sub
       - cmliu/edgetunnel
       - XIU2/CloudflareSpeedTest
       - 735754647/Free-Nodes
@@ -33,7 +39,12 @@ sources:
       - 'filename:addressesipv6api.txt'
       - '"IP地址" filename:addressescsv.csv'
       - 'filename:ip.txt CloudflareSpeedTest'
-    max_files_per_run: 30
+      - 'filename:ip.txt CloudflareST'
+      - 'filename:cfst.txt'
+      - 'filename:result.csv "下载速度"'
+      - '"优选" filename:addressesapi.txt'
+      - 'filename:addresses.txt cloudflare'
+    max_files_per_run: 50
     cache_ttl_hours: 24
     offline: false
     # allowlisted repos are OSS address lists (WorkerVless2sub / CFcdnVmess2sub / …)
@@ -42,7 +53,8 @@ sources:
     enabled: true
     candidate_files:
       - candidates/cf-user-20260928.txt
-    max_ips_per_run: 150
+      - candidates/cf-public-ranges.txt
+    max_ips_per_run: 300
   candidate_import:
     enabled: false
 probe:
