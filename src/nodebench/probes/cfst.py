@@ -7,6 +7,7 @@ import ssl
 import subprocess
 import threading
 import time
+import urllib.request
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -467,6 +468,49 @@ def build_probe_env(bypass_system_proxy: bool = True) -> dict[str, str]:
     return env
 
 
+def _url_reachable(url: str, timeout: float = 3.0) -> bool:
+    """Quick GET of the first bytes — enough to tell a dead speed source."""
+    try:
+        request = urllib.request.Request(
+            url,
+            method="GET",
+            headers={"Range": "bytes=0-1024", "User-Agent": "NodeBench/0.1"},
+        )
+        env = build_probe_env(True)
+        # urllib reads env at import; call urlopen with explicit opener-free path
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            response.read(256)
+            return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def resolve_speedtest_url(
+    configured: str,
+    candidates: Sequence[str] | None = None,
+    *,
+    probe: bool = True,
+) -> str:
+    """Pick a download URL for CFST.
+
+    Explicit configured URL wins unless it is empty/``auto``. Otherwise the
+    first reachable entry in ``candidates`` is used — one dead mirror must
+    not zero out every speed sample.
+    """
+    value = str(configured or "").strip()
+    if value and value.lower() not in {"auto", "自动选择"}:
+        return value
+    pool = [str(u).strip() for u in (candidates or ()) if str(u).strip()]
+    if not value and not pool:
+        return ""
+    if not probe:
+        return pool[0] if pool else value
+    for url in pool:
+        if _url_reachable(url):
+            return url
+    return pool[0] if pool else value
+
+
 def default_cfst_runner(
     command: Sequence[str],
     timeout: float,
@@ -559,8 +603,9 @@ class CfstProber:
         if runner is default_cfst_runner:
             # Default runner: honour bypass_system_proxy (default on) so
             # Clash/TUN cannot reroute the download being measured.
+            cf_cfg = getattr(getattr(config, "probe", None), "cf", None)
             probe_env = build_probe_env(
-                bool(getattr(config.probe.cf, "bypass_system_proxy", True))
+                bool(getattr(cf_cfg, "bypass_system_proxy", True))
             )
             _base = runner
 
@@ -580,6 +625,7 @@ class CfstProber:
         self._version_cache: str | None = None
         self._version_lock = threading.Lock()
         self._resolved_ips: dict[tuple[str, int], str] = {}
+        self._resolved_speed_url: str | None = None
 
     @property
     def probe_config(self) -> Any:
@@ -591,7 +637,13 @@ class CfstProber:
 
     @property
     def speedtest_url(self) -> str:
-        return str(self.probe_config.speedtest_url or "").strip()
+        if self._resolved_speed_url is None:
+            configured = str(self.probe_config.speedtest_url or "").strip()
+            candidates = list(getattr(self.probe_config, "speedtest_urls", None) or [])
+            self._resolved_speed_url = resolve_speedtest_url(
+                configured, candidates, probe=True
+            )
+        return self._resolved_speed_url or ""
 
     @property
     def ip_family(self) -> str:

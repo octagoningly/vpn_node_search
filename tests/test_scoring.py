@@ -688,6 +688,7 @@ class TestEndpointScoring:
             results=(make_eok("e1", region="HKG"),),
         )
         assert report.endpoints[0].country_code == "HK"
+        assert report.endpoints[0].region == "HKG"
 
     def test_country_from_iata_nrt_is_jp(self) -> None:
         report = run_score(

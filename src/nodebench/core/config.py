@@ -158,6 +158,15 @@ class CfProbeConfig(BaseModel):
     max_nodes: int = 2000
     target_host: str = ""
     speedtest_url: str = ""
+    # Ordered fallback list. When speedtest_url is empty or "auto", the first
+    # reachable entry wins (idea borrowed from CFData-style multi-source select).
+    speedtest_urls: list[str] = Field(
+        default_factory=lambda: [
+            "https://speed.cloudflare.com/__down?bytes=5000000",
+            "https://cf.090227.xyz/__down?bytes=5000000",
+            "http://speed.okl.abrdns.com/__down?bytes=5000000",
+        ]
+    )
     cfst_path: str = ""
     tcp_timeout_s: float = 5
     tls_timeout_s: float = 5

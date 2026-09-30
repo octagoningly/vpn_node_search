@@ -590,6 +590,7 @@ def _score_endpoint(
         loss_pct=loss,
         risk=risk,
         country_code=country,
+        region=result_region,
         address=edge.address,
         port=edge.port,
         target_host=edge.target_host,

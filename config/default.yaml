@@ -50,6 +50,10 @@ probe:
     max_download_nodes: 20
     target_host: octagoningly-vpn.pages.dev
     speedtest_url: ""
+    speedtest_urls:
+      - https://speed.cloudflare.com/__down?bytes=5000000
+      - https://cf.090227.xyz/__down?bytes=5000000
+      - http://speed.okl.abrdns.com/__down?bytes=5000000
     cfst_path: tools/cfst/CloudflareSpeedTest.exe
     tcp_timeout_s: 5
     tls_timeout_s: 5
@@ -86,7 +90,7 @@ scoring:
     require_real_probe_success: true
     require_speed: true
     max_latency_ms: 800.0
-    min_speed_mb_s: 0.5
+    min_speed_mb_s: 0.3
     max_risk: 50.0
     allowed_countries: []
     missing: pending

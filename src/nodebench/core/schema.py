@@ -512,6 +512,7 @@ class ExitObservation(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     item_id: str
+    kind: Literal["proxy_node"] = "proxy_node"
     exit_ip: str = ""
     service: str = ""
     observed_at: datetime = Field(default_factory=_utc_now)
@@ -519,6 +520,7 @@ class ExitObservation(BaseModel):
     country_code: str = UNKNOWN_PLACEHOLDER
     asn: str = UNKNOWN_PLACEHOLDER
     isp: str = UNKNOWN_PLACEHOLDER
+    city: str = UNKNOWN_PLACEHOLDER
     errors: list[ErrorInfo] = Field(default_factory=list)
 
     @model_validator(mode="after")
@@ -543,8 +545,8 @@ class ReputationObservation(BaseModel):
     provider: str = ""
     raw_score: float | None = None
     risk: float | None = None
-    risk_level: str = UNKNOWN_PLACEHOLDER
-    evidence: str = ""
+    risk_level: Literal["low", "medium", "high", "unknown"] = UNKNOWN_PLACEHOLDER
+    evidence: dict[str, Any] = Field(default_factory=dict)
     observed_at: datetime = Field(default_factory=_utc_now)
     status: Status = Status.UNKNOWN
     errors: list[ErrorInfo] = Field(default_factory=list)
@@ -659,6 +661,8 @@ class RankedEndpoint(BaseModel):
     loss_pct: float | None = None
     risk: float | None = None
     country_code: str | None = None
+    # CFST IATA PoP (HKG, SIN, …) — measured landing site, not IP registration.
+    region: str = ""
     address: str
     port: int
     target_host: str = ""

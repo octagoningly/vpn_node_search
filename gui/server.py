@@ -513,6 +513,8 @@ def _load_score_index(scored_path: Path) -> dict[tuple[str, str], dict]:
                 "loss": node.get("loss_pct"),
                 "availability": node.get("availability_rate"),
                 "rank": node.get("rank"),
+                "region": str(node.get("region") or ""),
+                "country_code": str(node.get("country_code") or ""),
             }
     return index
 
@@ -614,6 +616,8 @@ def _merge_scores(items: list[dict], scored: dict[tuple[str, str], dict]) -> lis
                 row["score"] = meta.get("score") or ""
             if meta.get("rank") is not None:
                 row["rank"] = meta["rank"]
+            if meta.get("region"):
+                row["region"] = meta["region"]
         out.append(row)
     return out
 
@@ -648,7 +652,8 @@ def _scored_to_rows(
                     "speed": f"{speed:.1f}" if isinstance(speed, (int, float)) else "",
                     "purity": f"{purity:.2f}" if isinstance(purity, (int, float)) else "",
                     "stability": f"{stability:.2f}" if isinstance(stability, (int, float)) else "",
-                    "country": str(node.get("remarks") or node.get("country_code") or "??"),
+                    "country": str(node.get("country_code") or "??"),
+                    "region": str(node.get("region") or ""),
                     "score": score_txt,
                     "remark": "",
                 }

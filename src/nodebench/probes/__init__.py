@@ -33,6 +33,7 @@ from nodebench.probes.cfst import (
     default_endpoint_check,
     make_cfst_prober,
     parse_cfst_csv,
+    resolve_speedtest_url,
     run_cf_batch,
 )
 from nodebench.probes.mihomo import MihomoProber, build_mihomo_config, to_mihomo_proxy
@@ -89,6 +90,7 @@ __all__ = [
     "proxy_budget",
     "proxy_target",
     "resolve_binary",
+    "resolve_speedtest_url",
     "run_cf_batch",
     "run_proxy_batch",
     "to_mihomo_proxy",

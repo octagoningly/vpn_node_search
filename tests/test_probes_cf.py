@@ -32,6 +32,7 @@ from nodebench.probes.cfst import (
     default_cfst_runner,
     family_mismatch,
     normalize_ip,
+    resolve_speedtest_url,
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -64,6 +65,43 @@ def test_build_probe_env_can_keep_proxy(monkeypatch):
     monkeypatch.setenv("HTTPS_PROXY", "http://127.0.0.1:7890")
     env = build_probe_env(False)
     assert env.get("HTTPS_PROXY") == "http://127.0.0.1:7890"
+
+
+def test_resolve_speedtest_url_prefers_explicit():
+    assert (
+        resolve_speedtest_url(
+            "https://example.com/dl", ["https://a", "https://b"], probe=False
+        )
+        == "https://example.com/dl"
+    )
+
+
+def test_resolve_speedtest_url_falls_through_dead_first(monkeypatch):
+    import nodebench.probes.cfst as cfst_mod
+
+    calls: list[str] = []
+
+    def fake_ok(url, timeout=3.0):
+        calls.append(url)
+        return url.endswith("good")
+
+    monkeypatch.setattr(cfst_mod, "_url_reachable", fake_ok)
+    picked = resolve_speedtest_url(
+        "auto",
+        ["https://mirror-a/dead", "https://mirror-b/good"],
+        probe=True,
+    )
+    assert picked == "https://mirror-b/good"
+    assert len(calls) == 2
+
+
+def test_resolve_speedtest_url_defaults_to_first_when_none_up(monkeypatch):
+    import nodebench.probes.cfst as cfst_mod
+
+    monkeypatch.setattr(cfst_mod, "_url_reachable", lambda *a, **k: False)
+    assert (
+        resolve_speedtest_url("", ["https://a", "https://b"], probe=True) == "https://a"
+    )
 
 
 def sample_target(**overrides) -> EndpointTarget:

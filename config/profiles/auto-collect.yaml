@@ -59,7 +59,11 @@ probe:
     enabled: true
     cfst_path: tools/cfst/CloudflareSpeedTest.exe
     target_host: octagoningly-vpn.pages.dev
-    speedtest_url: https://speed.cloudflare.com/__down?bytes=5000000
+    speedtest_url: auto
+    speedtest_urls:
+      - https://speed.cloudflare.com/__down?bytes=5000000
+      - https://cf.090227.xyz/__down?bytes=5000000
+      - http://speed.okl.abrdns.com/__down?bytes=5000000
     max_nodes: 2500
     max_download_nodes: 80
     total_deadline_s: 420

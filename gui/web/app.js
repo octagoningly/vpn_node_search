@@ -415,7 +415,7 @@
         }
       }
       if (!rows.length) {
-        tb.innerHTML = `<tr><td colspan="7" class="empty-cell">${
+        tb.innerHTML = `<tr><td colspan="8" class="empty-cell">${
           r.note || "暂无结果 — 点「开始运行」跑一轮即可看到入榜节点"
         }</td></tr>`;
         $("#resultStats").innerHTML = `
@@ -425,6 +425,12 @@
           <div class="stat"><div class="stat-n">—</div><div class="stat-l">国家 / 地区</div></div>`;
         return;
       }
+      const zh = {
+        US: "美国", JP: "日本", SG: "新加坡", HK: "香港", KR: "韩国",
+        TW: "台湾", DE: "德国", GB: "英国", FR: "法国", NL: "荷兰",
+        CA: "加拿大", AU: "澳大利亚", IN: "印度", MY: "马来西亚",
+        TH: "泰国", ID: "印尼", VN: "越南", PH: "菲律宾", AE: "阿联酋",
+      };
       tb.innerHTML = rows
         .map(
           (it, i) =>
@@ -435,18 +441,20 @@
               <td>${it.purity || "-"}</td>
               <td>${it.stability || "-"}</td>
               <td><span class="badge badge-ok">${it.country || "??"}</span></td>
+              <td>${it.region ? `<span class="badge badge-accent">${it.region}</span>` : "—"}</td>
               <td>${it.score || "-"}</td>
             </tr>`
         )
         .join("");
       const speeds = rows.map((x) => parseFloat(x.speed)).filter((x) => !isNaN(x));
+      const regions = new Set(rows.map((x) => x.region).filter(Boolean));
       $("#resultStats").innerHTML = `
         <div class="stat"><div class="stat-n">${rows.length}</div><div class="stat-l">入榜</div></div>
         <div class="stat"><div class="stat-n">${
           speeds.length ? (speeds.reduce((a, b) => a + b, 0) / speeds.length).toFixed(1) : "—"
         }</div><div class="stat-l">平均速度 MB/s</div></div>
         <div class="stat"><div class="stat-n">${speeds.length ? Math.max(...speeds).toFixed(1) : "—"}</div><div class="stat-l">最快 MB/s</div></div>
-        <div class="stat"><div class="stat-n">${new Set(rows.map((x) => x.country)).size || "—"}</div><div class="stat-l">国家 / 地区</div></div>`;
+        <div class="stat"><div class="stat-n">${regions.size || new Set(rows.map((x) => x.country)).size || "—"}</div><div class="stat-l">落地地区</div></div>`;
     } catch (e) {
       console.warn(e);
       if (note) {
@@ -455,7 +463,7 @@
         note.classList.add("warn");
       }
       if (tb) {
-        tb.innerHTML = `<tr><td colspan="7" class="empty-cell">加载失败：${e.message}</td></tr>`;
+        tb.innerHTML = `<tr><td colspan="8" class="empty-cell">加载失败：${e.message}</td></tr>`;
       }
     }
   }
