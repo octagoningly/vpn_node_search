@@ -380,12 +380,37 @@ class ScoringCfWeights(BaseModel):
         return self
 
 
+class ScoringDiversityConfig(BaseModel):
+    """Region-quota selection so one PoP/country cannot monopolise the export."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = True
+    per_region: int = 5
+    max_total: int = 0
+
+    @field_validator("per_region")
+    @classmethod
+    def _positive_per_region(cls, value: int) -> int:
+        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            raise ValueError("diversity.per_region must be an integer >= 1")
+        return value
+
+    @field_validator("max_total")
+    @classmethod
+    def _non_negative_total(cls, value: int) -> int:
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise ValueError("diversity.max_total must be an integer >= 0")
+        return value
+
+
 class ScoringConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     weights: ScoringWeights = Field(default_factory=ScoringWeights)
     filters: ScoringFilters = Field(default_factory=ScoringFilters)
     cf_weights: ScoringCfWeights = Field(default_factory=ScoringCfWeights)
+    diversity: ScoringDiversityConfig = Field(default_factory=ScoringDiversityConfig)
 
 
 class GithubUploadConfig(BaseModel):
@@ -725,6 +750,7 @@ __all__ = [
     "ScoringWeights",
     "ScoringFilters",
     "ScoringCfWeights",
+    "ScoringDiversityConfig",
     "ScoringConfig",
     "GithubUploadConfig",
     "HttpUploadConfig",

@@ -2,7 +2,13 @@ from __future__ import annotations
 
 import pytest
 
-from nodebench.core.config import ScoringCfWeights, ScoringConfig, ScoringFilters, ScoringWeights
+from nodebench.core.config import (
+    ScoringCfWeights,
+    ScoringConfig,
+    ScoringDiversityConfig,
+    ScoringFilters,
+    ScoringWeights,
+)
 from nodebench.core.schema import (
     EdgeEndpoint,
     EndpointProbeResult,
@@ -884,3 +890,115 @@ class TestReport:
         assert snap["filters"]["max_risk"] == pytest.approx(50.0)
         assert snap["filters"]["require_speed"] is True
         assert snap["cf_anycast_neutral_risk"] == pytest.approx(30.0)
+
+
+class TestDiversity:
+    def _hk_edges(self, n: int, start: int = 1) -> tuple:
+        edges = []
+        results = []
+        for i in range(start, start + n):
+            item_id = f"hk-{i}"
+            edges.append(make_edge(item_id, address=f"104.16.0.{i}"))
+            results.append(
+                make_eok(
+                    item_id,
+                    latency=20.0 + i,
+                    speed=3.0 + i * 0.1,
+                    region="HKG",
+                )
+            )
+        return tuple(edges), tuple(results)
+
+    def _sg_edge(self, item_id: str = "sg-1", rank_speed: float = 1.0) -> tuple:
+        edge = make_edge(item_id, address="104.17.0.1")
+        result = make_eok(
+            item_id,
+            latency=200.0,
+            speed=rank_speed,
+            region="SIN",
+        )
+        return (edge,), (result,)
+
+    def test_per_region_quota_limits_country_winners(self) -> None:
+        hk_edges, hk_results = self._hk_edges(8)
+        sg_edges, sg_results = self._sg_edge()
+        report = run_score(
+            edges=hk_edges + sg_edges,
+            results=hk_results + sg_results,
+            scoring=ScoringConfig(
+                diversity=ScoringDiversityConfig(
+                    enabled=True, per_region=3, max_total=0
+                )
+            ),
+        )
+        ranked = [e for e in report.endpoints if e.status == "ranked"]
+        demoted = [e for e in report.endpoints if e.status == "filtered"]
+        assert len(ranked) == 4  # 3 HK + 1 SG
+        countries = sorted(e.country_code for e in ranked)
+        assert countries == ["HK", "HK", "HK", "SG"]
+        assert all("region_quota" in e.filters_failed for e in demoted)
+        assert all(e.rank == 0 for e in demoted)
+        ranks = sorted(e.rank for e in ranked)
+        assert ranks == [1, 2, 3, 4]
+
+    def test_diversity_disabled_keeps_all_ranked(self) -> None:
+        hk_edges, hk_results = self._hk_edges(8)
+        report = run_score(
+            edges=hk_edges,
+            results=hk_results,
+            scoring=ScoringConfig(
+                diversity=ScoringDiversityConfig(enabled=False)
+            ),
+        )
+        ranked = [e for e in report.endpoints if e.status == "ranked"]
+        assert len(ranked) == 8
+
+    def test_max_total_fills_with_global_best(self) -> None:
+        hk_edges, hk_results = self._hk_edges(8)
+        sg_edges, sg_results = self._sg_edge()
+        report = run_score(
+            edges=hk_edges + sg_edges,
+            results=hk_results + sg_results,
+            scoring=ScoringConfig(
+                diversity=ScoringDiversityConfig(
+                    enabled=True, per_region=1, max_total=4
+                )
+            ),
+        )
+        ranked = [e for e in report.endpoints if e.status == "ranked"]
+        assert len(ranked) == 4
+        by_country: dict[str, int] = {}
+        for item in ranked:
+            by_country[item.country_code] = by_country.get(item.country_code, 0) + 1
+        # per_region=1 keeps the SG winner, then fill goes to best HK
+        assert by_country.get("SG") == 1
+        assert by_country.get("HK") == 3
+
+    def test_unknown_country_groups_together(self) -> None:
+        edges = []
+        results = []
+        for i in range(1, 6):
+            item_id = f"u-{i}"
+            edges.append(make_edge(item_id, address=f"203.0.113.{i}"))
+            results.append(
+                make_eok(item_id, latency=50.0 + i, speed=2.0 + i * 0.2, region="")
+            )
+        report = run_score(
+            edges=tuple(edges),
+            results=tuple(results),
+            scoring=ScoringConfig(
+                diversity=ScoringDiversityConfig(enabled=True, per_region=2)
+            ),
+        )
+        ranked = [e for e in report.endpoints if e.status == "ranked"]
+        assert len(ranked) == 2
+
+    def test_diversity_in_rule_snapshot(self) -> None:
+        report = run_score(
+            edges=(make_edge("e1"),),
+            results=(make_eok(region="HKG"),),
+        )
+        snap = report.rule_snapshot["diversity"]
+        assert snap["enabled"] is True
+        assert snap["per_region"] == 5
+        assert snap["max_total"] == 0

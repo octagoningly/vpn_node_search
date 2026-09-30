@@ -5,7 +5,7 @@ from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime
 from typing import Any
 
-from nodebench.core.config import ScoringConfig
+from nodebench.core.config import ScoringConfig, ScoringDiversityConfig
 from nodebench.core.schema import (
     EdgeEndpoint,
     EndpointProbeResult,
@@ -46,6 +46,7 @@ MISSING_CODE = "missing_probe"
 MISSING_PURITY = "purity"
 MISSING_COUNTRY = "country"
 UNKNOWN_COUNTRY = "unknown"
+REGION_QUOTA = "region_quota"
 
 # Signals that an address is a known Cloudflare Anycast / CF edge IP.
 _CF_ASN_MARKERS = ("13335", "cloudflare")
@@ -614,6 +615,74 @@ def _assign_ranks(items: list[Any]) -> None:
         item.rank = position
 
 
+def _item_country_key(item: Any) -> str:
+    code = str(getattr(item, "country_code", "") or "").strip().upper()
+    if not code or code in {"NONE", "UNKNOWN", "??"}:
+        return "??"
+    return code
+
+
+def _rank_key(item: Any) -> tuple[float, float, str]:
+    return (
+        -float(getattr(item, "score", 0.0) or 0.0),
+        float(item.latency_ms) if item.latency_ms is not None else math.inf,
+        str(item.item_id),
+    )
+
+
+def _apply_diversity(items: list[Any], diversity: ScoringDiversityConfig) -> None:
+    """Keep at most ``per_region`` winners per country, optional global fill.
+
+    Unselected quality-pass items are demoted to ``filtered`` with
+    ``region_quota`` so exporters and reports only see the diverse set.
+    """
+    if not diversity.enabled:
+        return
+    ranked = sorted(
+        (item for item in items if item.status == "ranked"),
+        key=_rank_key,
+    )
+    if not ranked:
+        return
+
+    groups: dict[str, list[Any]] = {}
+    for item in ranked:
+        groups.setdefault(_item_country_key(item), []).append(item)
+
+    selected: list[Any] = []
+    seen: set[int] = set()
+    for key in sorted(groups):
+        for item in groups[key][: diversity.per_region]:
+            if id(item) not in seen:
+                selected.append(item)
+                seen.add(id(item))
+
+    if diversity.max_total > 0:
+        if len(selected) > diversity.max_total:
+            selected.sort(key=_rank_key)
+            selected = selected[: diversity.max_total]
+            seen = {id(item) for item in selected}
+        else:
+            for item in ranked:
+                if len(selected) >= diversity.max_total:
+                    break
+                if id(item) not in seen:
+                    selected.append(item)
+                    seen.add(id(item))
+
+    for item in ranked:
+        if id(item) in seen:
+            continue
+        item.status = "filtered"
+        failed = list(item.filters_failed or [])
+        if REGION_QUOTA not in failed:
+            failed.append(REGION_QUOTA)
+        item.filters_failed = failed
+        item.rank = 0
+
+    _assign_ranks(items)
+
+
 def score_run(
     *,
     run_id: str,
@@ -690,6 +759,8 @@ def score_run(
     ]
     _assign_ranks(proxies)
     _assign_ranks(endpoints)
+    _apply_diversity(proxies, scoring.diversity)
+    _apply_diversity(endpoints, scoring.diversity)
     counts = {
         "proxies": len(proxies),
         "endpoints": len(endpoints),
@@ -723,6 +794,7 @@ def score_run(
             "loss": scoring.cf_weights.loss,
         },
         "filters": scoring.filters.model_dump(mode="json"),
+        "diversity": scoring.diversity.model_dump(mode="json"),
     }
     for item in (*proxies, *endpoints):
         item.rule_snapshot = rule_snapshot

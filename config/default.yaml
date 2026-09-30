@@ -95,6 +95,10 @@ scoring:
     allowed_countries: []
     missing: pending
     stability_min_samples: 3
+  diversity:
+    enabled: true
+    per_region: 5
+    max_total: 0
 publish:
   enabled: false
   allow_proxy_credentials: false

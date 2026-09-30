@@ -91,7 +91,7 @@ Copy-Item .env.example .env
 
 `scripts/publish.ps1` 会自动加载 `.env`。`.env` 已在 `.gitignore` 中，不会上传。
 
-评分权重、速度硬门槛、备注格式均可在 `config/default.yaml` 的 `scoring` 段自定义。
+评分权重、速度硬门槛、备注格式均可在 `config/default.yaml` 的 `scoring` 段自定义。按地区多样性（每区前 N 名，避免单一地区刷榜）见 `scoring.diversity`，`enabled: false` 可关回全局排名。
 
 ## 二进制获取
 
