@@ -96,8 +96,10 @@ scoring:
     missing: pending
     stability_min_samples: 3
   diversity:
-    enabled: true
-    per_region: 5
+    # 地区配额：默认关闭，避免同一地区好节点被砍掉。
+    # 需要地域多样性时再打开，并设置每地区上限。
+    enabled: false
+    per_region: 15
     max_total: 0
 publish:
   enabled: false

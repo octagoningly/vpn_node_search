@@ -381,12 +381,16 @@ class ScoringCfWeights(BaseModel):
 
 
 class ScoringDiversityConfig(BaseModel):
-    """Region-quota selection so one PoP/country cannot monopolise the export."""
+    """Region-quota selection so one PoP/country cannot monopolise the export.
+
+    Off by default: when the network only has strong HK/JP nodes, a tight
+    quota throws away good results. Turn on for deliberate geographic mix.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
-    enabled: bool = True
-    per_region: int = 5
+    enabled: bool = False
+    per_region: int = 15
     max_total: int = 0
 
     @field_validator("per_region")

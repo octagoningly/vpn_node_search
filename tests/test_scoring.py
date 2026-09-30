@@ -997,8 +997,19 @@ class TestDiversity:
         report = run_score(
             edges=(make_edge("e1"),),
             results=(make_eok(region="HKG"),),
+            scoring=ScoringConfig(
+                diversity=ScoringDiversityConfig(enabled=True, per_region=15)
+            ),
         )
         snap = report.rule_snapshot["diversity"]
         assert snap["enabled"] is True
-        assert snap["per_region"] == 5
+        assert snap["per_region"] == 15
         assert snap["max_total"] == 0
+
+    def test_diversity_disabled_by_default_keeps_all_winners(self) -> None:
+        """A single strong region must not be capped when diversity is off."""
+        edges = tuple(make_edge(f"e{i}", address=f"203.0.113.{i}") for i in range(1, 8))
+        results = tuple(make_eok(f"e{i}", region="HKG") for i in range(1, 8))
+        report = run_score(edges=edges, results=results)
+        ranked = [e for e in report.endpoints if e.status == "ranked"]
+        assert len(ranked) == 7

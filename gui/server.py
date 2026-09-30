@@ -752,6 +752,19 @@ class Handler(BaseHTTPRequestHandler):
                     "publish_addcsv": urls["addcsv"],
                     "bypass_system_proxy": bool(bypass),
                     "theme": load_theme(),
+                    "diversity": {
+                        "enabled": bool(
+                            ((cfg.get("scoring") or {}).get("diversity") or {}).get(
+                                "enabled", False
+                            )
+                        ),
+                        "per_region": int(
+                            ((cfg.get("scoring") or {}).get("diversity") or {}).get(
+                                "per_region", 15
+                            )
+                            or 15
+                        ),
+                    },
                 }
             )
         if path == "/api/run/status":
@@ -862,6 +875,17 @@ class Handler(BaseHTTPRequestHandler):
                     cf["bypass_system_proxy"] = on
                     proxy = probe.setdefault("proxy", {})
                     proxy["bypass_system_proxy"] = on
+                if "diversity" in body and isinstance(body["diversity"], dict):
+                    scoring = data.setdefault("scoring", {})
+                    div = scoring.setdefault("diversity", {})
+                    src = body["diversity"]
+                    if "enabled" in src:
+                        div["enabled"] = bool(src["enabled"])
+                    if "per_region" in src:
+                        try:
+                            div["per_region"] = max(1, int(src["per_region"]))
+                        except (TypeError, ValueError):
+                            pass
                 save_config(data)
                 return self._json({"ok": True})
 

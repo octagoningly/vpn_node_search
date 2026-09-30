@@ -359,13 +359,17 @@
       await api("/api/settings", {
         weights,
         filters: {
-          min_speed_mb_s: parseFloat($("#minSpeed").value || "0.5"),
+          min_speed_mb_s: parseFloat($("#minSpeed").value || "0.3"),
           max_latency_ms: parseFloat($("#maxLatency").value || "800"),
           max_risk: parseFloat($("#maxRisk").value || "50"),
           allowed_countries: countries,
         },
         addapi_remark_template: $("#remarkTpl").value.trim(),
         bypass_system_proxy: $("#btnBypassProxy")?.textContent.trim() === "已开启",
+        diversity: {
+          enabled: $("#btnDiversity")?.textContent.trim() === "已开启",
+          per_region: parseInt($("#perRegion")?.value || "15", 10),
+        },
       });
       toast("设置已保存");
     } catch (e) {
@@ -385,10 +389,42 @@
     }
   });
 
+  $("#btnDiversity")?.addEventListener("click", async () => {
+    const el = $("#btnDiversity");
+    const on = el.textContent.trim() !== "已开启";
+    el.textContent = on ? "已开启" : "已关闭";
+    const field = $("#perRegionField");
+    const input = $("#perRegion");
+    if (field) field.style.opacity = on ? "1" : ".5";
+    if (input) input.disabled = !on;
+    try {
+      await api("/api/settings", {
+        diversity: {
+          enabled: on,
+          per_region: parseInt(input?.value || "15", 10),
+        },
+      });
+      toast(on ? "已开启地区配额" : "已关闭地区配额，同地区好节点全部保留");
+    } catch (e) {
+      toast("保存失败：" + e.message);
+    }
+  });
+
   api("/api/status").then((s) => {
     const el = $("#btnBypassProxy");
     if (el && typeof s.bypass_system_proxy === "boolean") {
       el.textContent = s.bypass_system_proxy ? "已开启" : "已关闭";
+    }
+    const d = $("#btnDiversity");
+    if (d && s.diversity) {
+      d.textContent = s.diversity.enabled ? "已开启" : "已关闭";
+      const input = $("#perRegion");
+      const field = $("#perRegionField");
+      if (input) {
+        input.value = s.diversity.per_region || 15;
+        input.disabled = !s.diversity.enabled;
+      }
+      if (field) field.style.opacity = s.diversity.enabled ? "1" : ".5";
     }
   }).catch(() => {});
 

@@ -329,6 +329,19 @@
                 <button class="btn btn-ghost" id="btnBypassProxy">已开启</button>
               </div>
 
+              <div class="card-label" style="margin-top:20px">地区配额</div>
+              <div class="switch-row">
+                <div>
+                  <div class="switch-title">限制每个地区入榜数量</div>
+                  <div class="hint">关闭后同一地区好节点全部保留；开启才做地域打散</div>
+                </div>
+                <button class="btn btn-ghost" id="btnDiversity">已关闭</button>
+              </div>
+              <label class="field" id="perRegionField" style="opacity:.5">
+                <span>每地区最多入榜</span>
+                <input class="input" id="perRegion" type="number" min="1" value="15" disabled />
+              </label>
+
               <div class="card-label" style="margin-top:20px">国家 / 地区</div>
               <div class="chip-select" id="countryChips">
                 <button class="chip-toggle active" data-v="">全部</button>
