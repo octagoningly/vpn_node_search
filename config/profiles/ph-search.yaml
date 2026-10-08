@@ -1,0 +1,36 @@
+# 菲律宾节点专项搜索：本地 PH 候选文件 + mihomo 实测，不碰 CF 优选与发布
+profile: ph-search
+runner_id: local:desktop-a
+sources:
+  local:
+    enabled: true
+    paths:
+      - candidates/ph-nodes.txt
+  subscriptions:
+    enabled: false
+  github:
+    enabled: false
+  cf:
+    enabled: false
+  candidate_import:
+    enabled: false
+probe:
+  proxy:
+    enabled: true
+    concurrency: 5
+    max_nodes: 20
+    max_download_mb_each: 5
+    speedtest_url: https://speed.cloudflare.com/__down?bytes=5000000
+    mihomo_path: tools/mihomo/mihomo.exe
+    api_timeout_s: 10
+    per_node_timeout_s: 20
+    total_deadline_s: 180
+    bypass_system_proxy: true
+  cf:
+    enabled: false
+intelligence:
+  reputation_enabled: false
+publish:
+  enabled: false
+  allow_proxy_credentials: false
+  cf_candidates_authorized: false

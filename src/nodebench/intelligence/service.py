@@ -195,6 +195,7 @@ class IntelligenceService:
                 unknown_geo += 1
             entry = ExitObservation(
                 item_id=item_id,
+                kind="proxy_node",
                 exit_ip=exit_ip,
                 service=str(self.config.echo_url or ""),
                 observed_at=_utc_now(),
@@ -202,6 +203,7 @@ class IntelligenceService:
                 country_code=geo.country_code,
                 asn=geo.asn,
                 isp=geo.isp,
+                city=geo.city,
                 errors=exit_errors,
             )
             entries.append(entry)

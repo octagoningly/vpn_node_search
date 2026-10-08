@@ -40,7 +40,7 @@ def make_rep(**overrides) -> ReputationObservation:
         "raw_score": 12.5,
         "risk": 12.5,
         "risk_level": "low",
-        "evidence": "{}",
+        "evidence": {},
         "observed_at": NOW,
         "status": Status.OK,
         "errors": [],

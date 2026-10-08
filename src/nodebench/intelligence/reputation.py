@@ -7,6 +7,7 @@ import urllib.parse
 import urllib.request
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
+from typing import Any
 
 from nodebench.core.schema import ErrorInfo, ReputationObservation, Status
 
@@ -41,9 +42,7 @@ def risk_level_for(risk: float | None) -> str:
         return "low"
     if risk < RISK_MEDIUM:
         return "medium"
-    if risk < RISK_HIGH:
-        return "high"
-    return "critical"
+    return "high"
 
 
 class ReputationProvider(ABC):
@@ -69,7 +68,7 @@ class NullProvider(ReputationProvider):
             raw_score=None,
             risk=None,
             risk_level="unknown",
-            evidence="",
+            evidence={},
             observed_at=_utc_now(),
             status=Status.UNKNOWN,
             errors=[],
@@ -108,7 +107,7 @@ class SimpleHttpReputationProvider(ReputationProvider):
             raw_score=None,
             risk=None,
             risk_level="unknown",
-            evidence="",
+            evidence={},
             observed_at=_utc_now(),
             status=Status.FAILED,
             errors=[error],
@@ -201,6 +200,11 @@ class SimpleHttpReputationProvider(ReputationProvider):
                 ),
             )
         risk = normalize_risk(raw_score)
+        evidence: dict[str, Any] = {}
+        if isinstance(payload, dict):
+            for key, value in payload.items():
+                if isinstance(value, (str, int, float, bool)) or value is None:
+                    evidence[str(key)] = value
         return ReputationObservation(
             item_id=item_id,
             exit_ip=exit_ip or "",
@@ -208,7 +212,7 @@ class SimpleHttpReputationProvider(ReputationProvider):
             raw_score=raw_score,
             risk=risk,
             risk_level=risk_level_for(risk),
-            evidence=json.dumps(payload, ensure_ascii=False, sort_keys=True)[:512],
+            evidence=evidence,
             observed_at=_utc_now(),
             status=Status.OK,
             errors=[],
@@ -271,7 +275,7 @@ class AbuseIPDBProvider(ReputationProvider):
             raw_score=None,
             risk=None,
             risk_level="unknown",
-            evidence="",
+            evidence={},
             observed_at=_utc_now(),
             status=Status.FAILED,
             errors=[error],
@@ -413,7 +417,7 @@ class AbuseIPDBProvider(ReputationProvider):
             raw_score=raw_score,
             risk=risk,
             risk_level=risk_level_for(risk),
-            evidence=json.dumps(evidence, ensure_ascii=False, sort_keys=True)[:512],
+            evidence=evidence,
             observed_at=_utc_now(),
             status=Status.OK,
             errors=[],

@@ -195,6 +195,36 @@ def test_to_mihomo_proxy_reads_normalized_reality_params():
     }
 
 
+def test_to_mihomo_proxy_vmess_defaults():
+    """vmess URIs without encryption/aid still produce a valid mihomo config."""
+    proxy = to_mihomo_proxy(
+        sample_target(
+            protocol="vmess",
+            transport="ws",
+            security="none",
+            port=80,
+            params={"uuid": UUID, "path": "/vmess/", "host": "192.0.2.60"},
+        )
+    )
+    assert proxy["type"] == "vmess"
+    assert proxy["cipher"] == "auto"
+    assert proxy["alterId"] == 0
+    assert proxy["tls"] is False
+
+    explicit = to_mihomo_proxy(
+        sample_target(
+            protocol="vmess",
+            params={"cipher": "aes-128-gcm", "alterId": 64},
+        )
+    )
+    assert explicit["cipher"] == "aes-128-gcm"
+    assert explicit["alterId"] == 64
+
+    non_vmess = to_mihomo_proxy(sample_target(protocol="vless", params={}))
+    assert "cipher" not in non_vmess
+    assert "alterId" not in non_vmess
+
+
 def test_build_mihomo_config_shape():
     config = build_mihomo_config(sample_target(), mixed_port=18080, api_port=19090)
     assert config["mixed-port"] == 18080

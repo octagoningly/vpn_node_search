@@ -362,7 +362,11 @@ def record_intelligence(
                         else None
                     ),
                     float(snapshot.risk) if snapshot.risk is not None else None,
-                    str(snapshot.evidence or ""),
+                    (
+                        json.dumps(snapshot.evidence, ensure_ascii=False, sort_keys=True)
+                        if snapshot.evidence
+                        else ""
+                    ),
                 ),
             )
             written += 1

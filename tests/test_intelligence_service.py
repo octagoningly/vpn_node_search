@@ -160,7 +160,7 @@ def test_risk_level_for():
     assert risk_level_for(10.0) == "low"
     assert risk_level_for(30.0) == "medium"
     assert risk_level_for(60.0) == "high"
-    assert risk_level_for(90.0) == "critical"
+    assert risk_level_for(90.0) == "high"
 
 
 def test_null_provider_reports_unknown_without_faking_purity():

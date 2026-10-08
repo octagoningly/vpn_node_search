@@ -65,11 +65,17 @@ def to_mihomo_proxy(target: ProxyTarget) -> dict[str, Any]:
     if password is not None:
         proxy["password"] = str(password)
     cipher = _first(params.get("cipher"), credentials.get("cipher"))
+    if cipher is None and protocol == "vmess":
+        # vmess URIs often omit the encryption field; mihomo rejects the
+        # config when cipher is missing, so fall back to the v2ray default.
+        cipher = "auto"
     if cipher is not None:
         proxy["cipher"] = str(cipher)
     alter_id = _first(
         params.get("alterId"), params.get("alter-id"), params.get("alter_id")
     )
+    if alter_id is None and protocol == "vmess":
+        alter_id = 0
     if alter_id is not None:
         proxy["alterId"] = int(alter_id)
     flow = _first(params.get("flow"))
